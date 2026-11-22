@@ -192,3 +192,18 @@ for (const variant of ['skips the handshake', 'forges the proof'] as const) {
     }
   });
 }
+
+test('settings saved while the start-up load is still running are not overwritten (CI race)', async () => {
+  const result = await env.sw.evaluate(async (url) => {
+    const b = (globalThis as any).__ba.bridge;
+    await chrome.storage.local.set({ token: '' }); // storage still holds the "old" (empty) token
+    b.loading = null;
+    b.config = null;
+    const startup = b.loadConfig(); // the service worker's start-up load, in flight
+    await b.setConfig({ serverUrl: url, token: 'e2e-token' }); // saved meanwhile
+    await startup;
+    return b.getConfig().token;
+  }, serverUrl);
+  expect(result).toBe('e2e-token');
+  await expect(panel.locator('#conn .conn-label')).toHaveText('Connected');
+});

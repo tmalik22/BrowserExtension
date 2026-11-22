@@ -82,6 +82,7 @@ export class Bridge {
   pairConfirmed = false;
   private pairing: Pairing | null = null;
   private inbox: Promise<void> = Promise.resolve();
+  private loading: Promise<BridgeConfig> | null = null;
 
   constructor(
     private onRpc: RpcHandler,
@@ -89,27 +90,33 @@ export class Bridge {
     private onConnChange: () => void,
   ) {}
 
-  async loadConfig(): Promise<BridgeConfig> {
-    const st = (await chrome.storage.local.get(['serverUrl', 'token', 'keyType', 'clientId'])) as {
-      serverUrl?: string;
-      token?: string;
-      keyType?: 'token' | 'paired';
-      clientId?: string;
-    };
-    let clientId = st.clientId;
-    if (!clientId) {
-      clientId = newId('c');
-      await chrome.storage.local.set({ clientId });
-    }
-    this.clientId = clientId;
-    const config: BridgeConfig = { serverUrl: st.serverUrl || DEFAULT_SERVER_URL, token: st.token || '', keyType: st.keyType === 'paired' ? 'paired' : 'token' };
-    this.config = config;
-    return config;
+  /**
+   * Load settings from storage once (concurrent callers share the same load), and never
+   * overwrite settings that setConfig() saved while the load was in flight.
+   */
+  loadConfig(): Promise<BridgeConfig> {
+    this.loading ??= (async () => {
+      const st = (await chrome.storage.local.get(['serverUrl', 'token', 'keyType', 'clientId'])) as {
+        serverUrl?: string;
+        token?: string;
+        keyType?: 'token' | 'paired';
+        clientId?: string;
+      };
+      let clientId = st.clientId;
+      if (!clientId) {
+        clientId = newId('c');
+        await chrome.storage.local.set({ clientId });
+      }
+      this.clientId = clientId;
+      this.config ??= { serverUrl: st.serverUrl || DEFAULT_SERVER_URL, token: st.token || '', keyType: st.keyType === 'paired' ? 'paired' : 'token' };
+      return this.config;
+    })();
+    return this.loading;
   }
 
   /** User clicked "Pair this browser": start a key exchange with the server. */
   async startPairing(): Promise<void> {
-    await (this.config ? Promise.resolve() : this.loadConfig());
+    await this.loadConfig();
     const keys = (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits'])) as CryptoKeyPair;
     const pub = b64(new Uint8Array(await crypto.subtle.exportKey('raw', keys.publicKey)));
     const commit = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(pub))));
@@ -142,7 +149,8 @@ export class Bridge {
   }
 
   async setConfig(c: Partial<BridgeConfig>): Promise<void> {
-    const cur = this.config ?? (await this.loadConfig());
+    await this.loadConfig(); // finish (or share) the initial load first so it can't overwrite us
+    const cur = this.config!;
     // A token typed into Settings is the server's pairing token; pairing stores its own secret.
     const token = (c.token ?? cur.token).trim();
     const keyType = c.keyType ?? (c.token !== undefined ? 'token' : cur.keyType);
@@ -161,7 +169,10 @@ export class Bridge {
 
   async connect(): Promise<void> {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
-    const cfg = this.config ?? (await this.loadConfig());
+    await this.loadConfig();
+    // Another connect() may have started while we waited: don't open a second socket.
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+    const cfg = this.config!;
     // No secret and no pairing started: wait for the user to click "Pair this browser".
     if (!cfg.token && !this.pairing) {
       this.setState('unconfigured', '');
