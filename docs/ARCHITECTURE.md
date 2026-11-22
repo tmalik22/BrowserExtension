@@ -45,6 +45,11 @@ harness from scratch.
     the prefix only changes every 8 images; `<think>`/`reasoning_content` handling; JSON tool
     mode for models without function calling.
   - `mock.ts` — scripted model for tests and demos.
+- **Pairing and auth** (`pairing.ts`, extension `bridge.ts`) — protocol 2. Pairing is a user-initiated
+  ECDH P-256 exchange with numeric comparison: both sides derive the secret (never sent) and a
+  6-digit code; the user confirms the match in the side panel and in the server window. Every
+  connection then runs a mutual HMAC challenge-response (`ba-server:` / `ba-client:` labels): the
+  server proves it holds the secret first, and the extension ignores all frames until it has.
 - **Server** (`server.ts`) — WebSocket hub (token pairing, origin check, heartbeat, reconnect
   grace period so a service-worker restart doesn't fail an action), event fan-out with replay
   buffers (side panel can be closed and reopened), approvals, HTTP API with SSE.

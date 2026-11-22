@@ -9,7 +9,7 @@
   <body>
     <header class="top">
       <div class="brand">
-        <span class="logo" aria-hidden="true"></span>
+        <img class="logo" src="icons/32.png" alt="" aria-hidden="true" />
         <span class="title">Browser Agent</span>
       </div>
       <div class="conn" id="conn" title="Connection to the agent server">
@@ -41,6 +41,7 @@
 
     <main id="view-chat" class="view">
       <div id="banner" class="banner hidden"></div>
+      <section id="setup" class="setup hidden" aria-live="polite"></section>
       <div id="messages" class="messages" aria-live="polite"></div>
       <div id="archived-note" class="archived-note hidden">This chat is from before the agent restarted. Send a message to carry on: the agent gets a summary of it.</div>
       <div id="status" class="status hidden">

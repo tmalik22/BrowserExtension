@@ -7,10 +7,17 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { DEFAULT_CONFIRM, DEFAULT_SETTINGS, type ApiKeyInfo, type ConfirmCategory, type ConfirmSettings, type PolicySettings, type ProfileInfo } from '@ba/shared';
+import { DEFAULT_CONFIRM, DEFAULT_SETTINGS, registerSecret, type ApiKeyInfo, type ConfirmCategory, type ConfirmSettings, type PolicySettings, type ProfileInfo } from '@ba/shared';
 import type { ModelProfile } from './providers/types.ts';
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+/** Set to true by the release bundle (scripts/build-server.ts), where everything sits next to server.mjs. */
+declare const __BA_BUNDLE__: boolean | undefined;
+
+/** Folder holding .env, models.json and data/: the repo root, or the bundle's own folder. */
+export const ROOT =
+  typeof __BA_BUNDLE__ !== 'undefined' && __BA_BUNDLE__
+    ? path.dirname(fileURLToPath(import.meta.url))
+    : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 export function loadEnv(): void {
   dotenv.config({ path: path.join(ROOT, '.env'), quiet: true } as never);
@@ -23,6 +30,7 @@ export interface ServerConfig {
   dataDir: string;
   /** Allowed chrome-extension:// IDs for WebSocket origins (empty = any extension). */
   extensionIds: string[];
+
   profiles: ModelProfile[];
   defaultProfileId: string;
   /** Extra operator instructions appended to the system prompt. */
@@ -75,6 +83,12 @@ export function setProfileModel(config: ServerConfig, profileId: string, model: 
 }
 
 export function resolveApiKey(p: ModelProfile): string | undefined {
+  const key = resolveApiKeyRaw(p);
+  registerSecret(key);
+  return key;
+}
+
+function resolveApiKeyRaw(p: ModelProfile): string | undefined {
   if (p.apiKey) return p.apiKey;
   if (p.apiKeyFile) {
     // Read on demand so a rotated key file is picked up without restarting.
@@ -132,7 +146,10 @@ export class KeyStore {
     } catch {
       /* no saved keys */
     }
-    for (const [k, v] of Object.entries(this.saved)) this.apply(k, v);
+    for (const [k, v] of Object.entries(this.saved)) {
+      registerSecret(v);
+      this.apply(k, v);
+    }
   }
 
   /** Key names used by the configured profiles, in profile order. */
@@ -146,6 +163,7 @@ export class KeyStore {
     if (/\s/.test(k)) throw new Error('The key has spaces or line breaks in it. Copy just the key.');
     if (k.length > 500) throw new Error('That is too long to be an API key.');
     if (k) {
+      registerSecret(k);
       this.saved[name] = k;
       this.apply(name, k);
     } else {
@@ -261,6 +279,8 @@ export class SettingsStore {
     this.value = sanitizeSettings({
       ...this.value,
       ...patch,
+      // Where file_upload may read from is set on this machine only (AGENT_DATA_DIR), never by a client.
+      uploadDir: this.value.uploadDir,
       enableOptional: { ...this.value.enableOptional, ...(patch.enableOptional ?? {}) },
       confirm,
     });

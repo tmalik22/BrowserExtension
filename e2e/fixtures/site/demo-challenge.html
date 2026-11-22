@@ -7,7 +7,7 @@
   body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: #faf7f2; color: #2b2622; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
   .card { background: #fff; border-radius: 16px; padding: 40px 48px; box-shadow: 0 2px 10px rgba(0,0,0,.06); max-width: 520px; text-align: center; }
   .logo { font-weight: 700; font-size: 22px; margin-bottom: 18px; }
-  .logo span { color: #c0623b; }
+  .logo span { color: #2f5d8a; }
   h1 { font-size: 24px; margin: 0 0 8px; }
   p { color: #6b625a; margin: 0 0 24px; }
   iframe { width: 320px; height: 78px; border: 0; }
@@ -19,11 +19,14 @@
   <div class="logo">Kiln<span>&amp;</span>Co.</div>
   <h1>Checking your connection</h1>
   <p>Please confirm you're a person before continuing to the shop.</p>
-  <!-- Local stand-in for a challenge widget (its URL matches the challenge-frame pattern). -->
-  <iframe id="widget" title="Human check" src="demo-challenge-widget.html?hcaptcha"></iframe>
+  <iframe id="widget" title="Human check"></iframe>
   <input type="hidden" name="h-captcha-response" value="">
   <div id="status"></div>
 </div>
+<script>
+  // Served from a challenge-provider hostname (mapped to the fixture server in the test browser).
+  document.getElementById('widget').src = `${location.protocol}//newassets.hcaptcha.com:${location.port}/demo-challenge-widget.html`;
+</script>
 <script>
   addEventListener('message', (e) => {
     if (e.data !== 'verified') return;

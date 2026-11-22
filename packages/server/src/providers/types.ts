@@ -78,6 +78,8 @@ export interface ModelProfile {
   script?: string;
   /** CAPTCHA helper protocol. "kraken" = CaptchaKraken JSON plan (no tool calls). */
   captchaProtocol?: 'kraken';
+  /** Found by local-model auto-detection (Ollama / LM Studio), not in models.json. */
+  detected?: boolean;
   /** Local script that starts this profile's model server (spawned on first CAPTCHA use). */
   startScript?: string;
 }

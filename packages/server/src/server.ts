@@ -25,8 +25,9 @@ import { createProvider } from './providers/index.ts';
 import type { ModelProfile, Provider } from './providers/types.ts';
 import { TranscriptWriter } from './transcript.ts';
 import { ChatHistory } from './history.ts';
+import { PairedClients, clientProof, newNonce, safeEqualHex, serverProof, startPairingExchange, whoamiProof, type PairPrompter } from './pairing.ts';
 
-export const SERVER_VERSION = '0.1.0';
+export const SERVER_VERSION = '0.2.0';
 const RECONNECT_GRACE_MS = 20_000;
 const EVENT_BUFFER = 2000;
 
@@ -152,12 +153,26 @@ export class AgentServer implements SessionHost {
   readonly gpu?: GpuMonitor;
   /** Called on POST /api/shutdown (a newly started server asking this one to make way). */
   private onShutdownRequest?: () => void;
+  private pairPrompt?: PairPrompter;
+  readonly paired: PairedClients;
+  /** One pairing question at a time in the server window, and not too many per minute. */
+  private pairingBusy = false;
+  private pairingAttempts: number[] = [];
 
   constructor(
     readonly config: ServerConfig,
-    opts: { settings?: Partial<PolicySettings>; transcripts?: boolean; gpu?: GpuMonitorOptions | false; onShutdownRequest?: () => void } = {},
+    opts: {
+      settings?: Partial<PolicySettings>;
+      transcripts?: boolean;
+      gpu?: GpuMonitorOptions | false;
+      onShutdownRequest?: () => void;
+      /** Approves "pair with code" requests (the server window). Without one, pairing needs the token. */
+      pairPrompt?: PairPrompter;
+    } = {},
   ) {
     this.onShutdownRequest = opts.onShutdownRequest;
+    this.pairPrompt = opts.pairPrompt;
+    this.paired = new PairedClients(config.dataDir);
     if (opts.gpu) {
       this.gpu = new GpuMonitor(opts.gpu);
       let last = 0;
@@ -187,6 +202,11 @@ export class AgentServer implements SessionHost {
         return;
       }
       const origin = req.headers.origin;
+      if (!this.hostAllowed(req.headers.host)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+      }
       if (origin && !this.originAllowed(origin)) {
         socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
         socket.destroy();
@@ -194,6 +214,21 @@ export class AgentServer implements SessionHost {
       }
       this.wss.handleUpgrade(req, socket, head, (ws) => this.onConnection(ws));
     });
+  }
+
+  /**
+   * DNS-rebinding guard: on a loopback bind, only accept requests addressed to this machine
+   * (a rebinding page sends its own hostname in Host). AGENT_ALLOWED_HOSTS adds names for remote use.
+   */
+  private hostAllowed(host: string | undefined): boolean {
+    if (!host) return false;
+    const h = host.toLowerCase();
+    const loopback = ['127.0.0.1', 'localhost', '::1'].includes(this.config.host);
+    const extra = (process.env.AGENT_ALLOWED_HOSTS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (extra.some((e) => h === e || h.startsWith(`${e}:`))) return true;
+    if (!loopback) return true;
+    const name = h.startsWith('[') ? h.slice(0, h.indexOf(']') + 1) : h.split(':')[0];
+    return name === '127.0.0.1' || name === 'localhost' || name === '[::1]';
   }
 
   private originAllowed(origin: string): boolean {
@@ -489,43 +524,154 @@ export class AgentServer implements SessionHost {
       }
       meta.lastPong = Date.now();
       if (!client) {
+        const reject = (message: string, code = 4003) => {
+          ws.send(JSON.stringify({ type: 'hello_error', message } satisfies ServerFrame));
+          ws.close(code, 'auth');
+        };
+        // Pairing, step 2: the client reveals the key it committed to; now both sides know the code.
+        if (pendingReveal) {
+          const r = pendingReveal;
+          pendingReveal = null;
+          const fail = () => {
+            // No question was asked yet: free the pairing slot.
+            clearTimeout(r.timer);
+            this.pairingBusy = false;
+            return reject('Invalid pairing request.');
+          };
+          if (frame.type !== 'pair_reveal') return fail();
+          let ex: { secret: string; code: string; confirm: string };
+          try {
+            ex = r.exchange.reveal(frame.publicKey);
+          } catch {
+            return fail();
+          }
+          pendingPair = { ...ex, hello: r.hello, browserConfirmed: false, serverApproved: false, timer: r.timer };
+          void this.pairPrompt!({ clientId: r.hello.clientId, code: ex.code, userAgent: r.hello.userAgent })
+            .catch(() => false)
+            .then((ok) => {
+              this.pairingBusy = false;
+              if (!pendingPair || ws.readyState !== 1) return; // gone or failed meanwhile
+              if (!ok) {
+                pendingPair = null;
+                return reject('Pairing was declined in the server window.');
+              }
+              pendingPair.serverApproved = true;
+              finishPairing();
+            });
+          return;
+        }
+        // Pairing, step 3: the user confirmed matching codes in the side panel.
+        if (pendingPair) {
+          if (frame.type !== 'pair_confirm' || typeof frame.proof !== 'string' || !safeEqualHex(frame.proof, pendingPair.confirm)) {
+            pendingPair = null;
+            return reject('Pairing failed: the codes did not match. Start pairing again.');
+          }
+          pendingPair.browserConfirmed = true;
+          finishPairing();
+          return;
+        }
+        // Second step of the mutual handshake.
+        if (pendingAuth) {
+          const p = pendingAuth;
+          pendingAuth = null;
+          if (frame.type !== 'auth' || typeof frame.proof !== 'string' || !safeEqualHex(frame.proof, clientProof(p.key, p.serverNonce))) {
+            return reject('Authentication failed. Pair this browser again or paste the current pairing token.');
+          }
+          accept(p.hello);
+          return;
+        }
         if (frame.type !== 'hello') {
           ws.close(4002, 'expected hello');
           return;
         }
-        if (!safeEqual(frame.token ?? '', this.config.token)) {
-          ws.send(JSON.stringify({ type: 'hello_error', message: 'Invalid pairing token. Copy the token printed by the agent server into the extension settings.' } satisfies ServerFrame));
-          ws.close(4003, 'bad token');
-          return;
-        }
         if (frame.protocol !== PROTOCOL_VERSION) {
-          ws.send(JSON.stringify({ type: 'hello_error', message: `Protocol mismatch: extension ${frame.protocol}, server ${PROTOCOL_VERSION}. Update both.` } satisfies ServerFrame));
-          ws.close(4004, 'protocol');
+          return reject(`Protocol mismatch: extension ${frame.protocol}, server ${PROTOCOL_VERSION}. Update both.`, 4004);
+        }
+        const clientId = typeof frame.clientId === 'string' && /^[\w-]{1,100}$/.test(frame.clientId) ? frame.clientId : newId('c');
+        frame.clientId = clientId;
+        if (typeof frame.clientNonce === 'string' && /^[0-9a-f]{32,128}$/.test(frame.clientNonce)) {
+          const key = frame.keyType === 'paired' ? this.paired.secretFor(clientId) : this.config.token;
+          if (!key) return reject('This browser is no longer paired with this server. Pair it again.');
+          const serverNonce = newNonce();
+          pendingAuth = { key, serverNonce, hello: frame };
+          ws.send(JSON.stringify({ type: 'challenge', serverNonce, proof: serverProof(key, frame.clientNonce) } satisfies ServerFrame));
           return;
         }
-        clearTimeout(helloTimer);
-        client = this.clientHandle(String(frame.clientId || newId('c')));
-        if (client.conn && client.conn !== ws) client.conn.close(4005, 'replaced');
-        client.attach(ws);
-        client.extensionVersion = frame.extensionVersion;
-        client.userAgent = frame.userAgent;
-        client.send({
-          type: 'hello_ok',
-          serverVersion: SERVER_VERSION,
-          protocol: PROTOCOL_VERSION,
-          profiles: this.config.profiles.map(profileInfo),
-          defaultProfileId: this.config.defaultProfileId,
-          settings: this.settings(),
-        });
-        client.send(this.stateFor(client.clientId));
-        if (this.gpu) client.send({ type: 'gpu', gpu: this.gpu.status() });
-        return;
+        if (typeof frame.pairCommit === 'string') {
+          if (!this.pairPrompt) return reject('This server can’t approve pairing here. Paste the pairing token it printed into Settings → Pairing token.');
+          const now = Date.now();
+          this.pairingAttempts = this.pairingAttempts.filter((t) => now - t < 60_000);
+          if (this.pairingAttempts.length >= 5) return reject('Too many pairing attempts. Wait a minute and try again.');
+          if (this.pairingBusy) return reject('Another pairing request is waiting in the server window. Try again in a moment.');
+          let exchange: ReturnType<typeof startPairingExchange>;
+          try {
+            exchange = startPairingExchange(frame.pairCommit);
+          } catch {
+            return reject('Invalid pairing request.');
+          }
+          this.pairingAttempts.push(now);
+          this.pairingBusy = true;
+          clearTimeout(helloTimer);
+          const timer = setTimeout(() => {
+            this.pairingBusy = false;
+            ws.close(4001, 'pairing timeout');
+          }, 120_000);
+          pendingReveal = { exchange, hello: frame, timer };
+          ws.send(JSON.stringify({ type: 'pair_pending', publicKey: exchange.serverPub } satisfies ServerFrame));
+          return;
+        }
+        // Scripts and tests that hold the token may still send it directly.
+        if (typeof frame.token === 'string' && frame.token && safeEqual(frame.token, this.config.token)) {
+          accept(frame);
+          return;
+        }
+        return reject(frame.token ? 'Invalid pairing token. Copy the token printed by the agent server into the extension settings.' : 'This server needs a pairing token.');
       }
       client.lastSeen = Date.now();
       this.onFrame(client, frame);
     });
+    let pendingAuth: { key: string; serverNonce: string; hello: Extract<ClientFrame, { type: 'hello' }> } | null = null;
+    let pendingReveal: { exchange: ReturnType<typeof startPairingExchange>; hello: Extract<ClientFrame, { type: 'hello' }>; timer: NodeJS.Timeout } | null = null;
+    let pendingPair:
+      | { secret: string; confirm: string; hello: Extract<ClientFrame, { type: 'hello' }>; browserConfirmed: boolean; serverApproved: boolean; timer: NodeJS.Timeout }
+      | null = null;
+    /** Pair once BOTH the side panel (matching codes) and the server window agreed. */
+    const finishPairing = () => {
+      if (!pendingPair?.browserConfirmed || !pendingPair.serverApproved) return;
+      const p = pendingPair;
+      pendingPair = null;
+      clearTimeout(p.timer);
+      this.paired.store(p.hello.clientId, p.secret, p.hello.userAgent);
+      accept(p.hello);
+    };
+    const accept = (frame: Extract<ClientFrame, { type: 'hello' }>) => {
+      clearTimeout(helloTimer);
+      client = this.clientHandle(String(frame.clientId || newId('c')));
+      if (client.conn && client.conn !== ws) client.conn.close(4005, 'replaced');
+      client.attach(ws);
+      client.extensionVersion = frame.extensionVersion;
+      client.userAgent = frame.userAgent;
+      client.send({
+        type: 'hello_ok',
+        serverVersion: SERVER_VERSION,
+        protocol: PROTOCOL_VERSION,
+        profiles: this.config.profiles.map(profileInfo),
+        defaultProfileId: this.config.defaultProfileId,
+        settings: this.settings(),
+      });
+      client.send(this.stateFor(client.clientId));
+      if (this.gpu) client.send({ type: 'gpu', gpu: this.gpu.status() });
+    };
     ws.on('close', () => {
       clearTimeout(helloTimer);
+      if (pendingPair) clearTimeout(pendingPair.timer);
+      if (pendingReveal) {
+        // Gave up before revealing: no question was asked, free the slot.
+        clearTimeout(pendingReveal.timer);
+        this.pairingBusy = false;
+      }
+      pendingPair = null;
+      pendingReveal = null;
       client?.detach(ws);
     });
     ws.on('error', () => {});
@@ -566,7 +712,8 @@ export class AgentServer implements SessionHost {
       }
       case 'approval_response': {
         const a = this.approvals.get(frame.approvalId);
-        if (a && this.sessions.get(a.sessionId)?.clientId === client.clientId) this.resolveApproval(frame.approvalId, frame.decision);
+        const valid = frame.decision === 'allow_once' || frame.decision === 'allow_site' || frame.decision === 'deny';
+        if (valid && a && this.sessions.get(a.sessionId)?.clientId === client.clientId) this.resolveApproval(frame.approvalId, frame.decision);
         return;
       }
       case 'update_settings': {
@@ -648,8 +795,17 @@ export class AgentServer implements SessionHost {
       res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(JSON.stringify(body));
     };
+    // DNS rebinding: refuse requests addressed to any other hostname.
+    if (!this.hostAllowed(req.headers.host)) return send(403, { error: 'Forbidden host.' });
     // Browsers must not be able to drive the API cross-origin: no CORS headers, JSON bodies only.
     if (url.pathname === '/health') return send(200, { ok: true, version: SERVER_VERSION, clients: this.connectedClients().length });
+    // Lets a newly started server check this really is a Browser Agent server holding the same
+    // token before sending it (domain-separated, so it can't answer extension handshakes).
+    if (url.pathname === '/whoami') {
+      const nonce = url.searchParams.get('nonce') ?? '';
+      if (!/^[0-9a-f]{32,128}$/.test(nonce)) return send(400, { error: 'Bad nonce.' });
+      return send(200, { proof: whoamiProof(this.config.token, nonce) });
+    }
     if (!this.authorized(req)) return send(401, { error: 'Missing or invalid bearer token.' });
     try {
       const parts = url.pathname.split('/').filter(Boolean); // api, sessions, :id, ...

@@ -66,6 +66,51 @@ const POINTER_MEMBERS: BrowserMember[] = [
 const ACTING_MEMBERS: BrowserMember[] = [...POINTER_MEMBERS, 'type', 'key', 'hold_key', 'form_input', 'file_upload', 'javascript_exec'];
 
 const ENTER_KEYS = new Set(['enter', 'return', 'kp_enter', 'numpadenter']);
+/** Keys that move focus or selection to another control. */
+const FOCUS_KEYS = new Set(['tab', 'iso_left_tab', 'up', 'down', 'left', 'right', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'page_up', 'page_down', 'pageup', 'pagedown', 'home', 'end', 'prior', 'next']);
+
+/** Members that read page content (site permission applies to these too in "ask" mode). */
+export const PAGE_READ_MEMBERS: readonly string[] = ['screenshot', 'zoom', 'read_page', 'find', 'get_page_text', 'read_console', 'read_network'];
+
+/**
+ * Does this call move focus and then activate something (e.g. key "Tab Enter", type "\t\n")?
+ * The control that ends up activated can't be inspected beforehand.
+ */
+export function movesFocusThenActivates(member: string, input: Record<string, unknown>): boolean {
+  if (member === 'key' || member === 'hold_key') {
+    const keys = keysOf(input.text);
+    const firstMove = keys.findIndex((k) => FOCUS_KEYS.has(k));
+    // After moving focus, pressing Enter/Space activates, and typed characters land in a field
+    // (maybe a password or card field) that wasn't the one inspected.
+    return firstMove >= 0 && keys.slice(firstMove + 1).some((k) => ENTER_KEYS.has(k) || SPACE_KEYS.has(k) || k.length === 1);
+  }
+  if (member === 'type') {
+    const t = String(input.text ?? '');
+    const tab = t.indexOf('\t');
+    return tab >= 0 && /\S|[\r\n ]/.test(t.slice(tab + 1));
+  }
+  return false;
+}
+
+/** Each chord of a key spec as modifiers + key ("ctrl+Enter a" -> [{mods:[ctrl], key:enter}, {key:a}]). */
+function chordsOf(spec: unknown): { mods: Set<string>; key: string }[] {
+  return String(spec ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((ch) => {
+      const parts = ch.toLowerCase().split('+');
+      const key = parts.pop()!;
+      return { mods: new Set(parts.map((m) => (m === 'control' ? 'ctrl' : m === 'cmd' || m === 'super' || m === 'win' ? 'meta' : m))), key };
+    });
+}
+
+const EDITABLE_ROLES = new Set(['textbox', 'searchbox', 'combobox', 'spinbutton']);
+type ElementInfo = NonNullable<ActionDescription['element']>;
+function isEditable(el: ElementInfo | undefined): boolean {
+  if (!el) return false;
+  return EDITABLE_ROLES.has(el.role) || el.tag === 'textarea' || (el.tag === 'input' && !['button', 'submit', 'reset', 'checkbox', 'radio', 'image', 'file', 'range', 'color'].includes(el.inputType ?? 'text'));
+}
 const SPACE_KEYS = new Set(['space', ' ', 'spacebar']);
 
 /** Last key of each chord in a key spec ("ctrl+Enter Tab" -> ["enter", "tab"]). */
@@ -164,7 +209,24 @@ export function evaluate(
     if (err) return { kind: 'deny', message: err };
   }
 
-  if (!needsDescription(member)) return { kind: 'allow' };
+  if (!needsDescription(member)) {
+    // Reading a page is also "acting on" its site: a page you allowed may have redirected, opened a
+    // popup or navigated back to a site you didn't approve.
+    if (settings.permissionMode === 'ask' && PAGE_READ_MEMBERS.includes(member) && desc?.unknown && !desc.host) {
+      // Couldn't tell which site the tab is on: don't read blind.
+      return { kind: 'ask', approvalKind: 'consequential', category: 'uninspectable', reason: `The agent wants to read a page it couldn't identify (${desc.unknown}).`, summary: member.replace(/_/g, ' ') };
+    }
+    if (settings.permissionMode === 'ask' && PAGE_READ_MEMBERS.includes(member) && desc?.host && !siteAllowed(desc.host, settings, state)) {
+      return {
+        kind: 'ask',
+        approvalKind: 'site',
+        site: siteKey(desc.host),
+        reason: `The agent wants to read ${desc.host}.`,
+        summary: `${member.replace(/_/g, ' ')} on ${desc.host}`,
+      };
+    }
+    return { kind: 'allow' };
+  }
   if (!desc) {
     // Acting members must be described; without one we can't judge the action (fail closed).
     if (settings.permissionMode === 'yolo' || !confirm.uninspectable || !ACTING_MEMBERS.includes(member as BrowserMember)) return { kind: 'allow' };
@@ -187,6 +249,17 @@ export function evaluate(
       site: siteKey(desc.host),
       reason: `The agent wants to interact with ${desc.host}.`,
       summary: `${member.replace(/_/g, ' ')} on ${desc.host}`,
+    };
+  }
+  // Acting inside an embedded page from another site needs that site's approval too.
+  const frameHost = desc.frameUrl && /^https?:/.test(desc.frameUrl) ? new URL(desc.frameUrl).hostname : '';
+  if (settings.permissionMode === 'ask' && frameHost && frameHost !== desc.host && !siteAllowed(frameHost, settings, state)) {
+    return {
+      kind: 'ask',
+      approvalKind: 'site',
+      site: siteKey(frameHost),
+      reason: `The agent wants to interact with ${frameHost} (embedded in ${desc.host || 'this page'}).`,
+      summary: `${member.replace(/_/g, ' ')} in an embedded ${frameHost} frame`,
     };
   }
 
@@ -228,6 +301,64 @@ export function evaluate(
   }
 
   const el = desc.element;
+  // "Tab Enter" and friends: the control that gets activated isn't the one we inspected.
+  if (confirm.uninspectable && movesFocusThenActivates(member, input)) {
+    return {
+      kind: 'ask',
+      approvalKind: 'consequential',
+      category: 'uninspectable',
+      site: desc.host,
+      reason: 'These key presses move focus and then press Enter or Space, so the control they activate can\'t be checked first.',
+      summary: member === 'type' ? 'Type text containing Tab followed by Enter/Space' : `Press ${String(input.text).slice(0, 60)}`,
+    };
+  }
+  // Enter in a text box that isn't part of a form is how chat apps send; Ctrl/Cmd+Enter is the
+  // usual "send" shortcut in mail apps.
+  if (confirm.messages && (member === 'key' || member === 'hold_key' || member === 'type')) {
+    const chords = member === 'type' ? [] : chordsOf(input.text);
+    const modEnter = chords.some((c) => ENTER_KEYS.has(c.key) && (c.mods.has('ctrl') || c.mods.has('meta')));
+    const plainEnter = member === 'type' ? act.enter : chords.some((c) => ENTER_KEYS.has(c.key) && !c.mods.has('shift'));
+    const chatBox = isEditable(el) && !el?.formSubmitName && el?.role !== 'searchbox' && el?.role !== 'combobox' && el?.inputType !== 'search';
+    if (modEnter || (plainEnter && chatBox)) {
+      return {
+        kind: 'ask',
+        approvalKind: 'consequential',
+        category: 'messages',
+        site: desc.host,
+        reason: modEnter ? 'Ctrl/Cmd+Enter usually sends a message or email.' : `Pressing Enter in "${el?.name || 'this text box'}" may send a message.`,
+        summary: member === 'type' ? `Type and press Enter in "${el?.name || 'text box'}"` : `Press ${String(input.text).slice(0, 60)}`,
+      };
+    }
+  }
+  // Single-key shortcuts outside text fields (e.g. "#" deletes in Gmail, "r" replies, Alt+key
+  // accesskeys). Typing text while focus isn't in a text field does the same.
+  if (confirm.uninspectable && (member === 'key' || member === 'hold_key' || member === 'type') && !isEditable(el)) {
+    const shortcut =
+      member === 'type'
+        ? String(input.text ?? '').length > 0
+        : chordsOf(input.text).some((c) => (c.key.length === 1 || c.key === 'delete' || c.key === 'backspace') && !c.mods.has('ctrl') && !c.mods.has('meta'));
+    if (shortcut) {
+      return {
+        kind: 'ask',
+        approvalKind: 'consequential',
+        category: 'uninspectable',
+        site: desc.host,
+        reason: 'Pressing these keys outside a text field can trigger page shortcuts (for example "#" deletes in some mail apps).',
+        summary: `Press ${String(input.text).slice(0, 60)}`,
+      };
+    }
+  }
+  // Key presses into a password / card field are typing into it.
+  if ((member === 'key' || member === 'hold_key') && el?.sensitive && confirm.sensitiveFields && keysOf(input.text).some((k) => k.length === 1 || k === 'space')) {
+    return {
+      kind: 'ask',
+      approvalKind: 'sensitive',
+      category: 'sensitiveFields',
+      site: desc.host,
+      reason: `Enter data into a sensitive field (${el.name || el.inputType || el.role}).`,
+      summary: `Press keys in "${el.name || el.role}"`,
+    };
+  }
   // Typing / setting values into sensitive fields.
   if ((member === 'type' || member === 'form_input') && el?.sensitive && confirm.sensitiveFields) {
     return {

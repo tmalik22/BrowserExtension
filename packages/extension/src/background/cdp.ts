@@ -139,7 +139,7 @@ export function isAttached(tabId: number): boolean {
  * Bounding box (CSS px, viewport) of the first iframe whose src matches, piercing closed shadow
  * roots. Content scripts cannot see iframes inside a closed shadow root; the DOM domain can.
  */
-export async function iframeRect(tabId: number, re: RegExp): Promise<{ x: number; y: number; w: number; h: number } | null> {
+export async function iframeRect(tabId: number, match: (url: string) => boolean): Promise<{ x: number; y: number; w: number; h: number } | null> {
   try {
     const { root } = await send<{ root: any }>(tabId, 'DOM.getDocument', { depth: -1, pierce: true });
     let found: any;
@@ -147,7 +147,8 @@ export async function iframeRect(tabId: number, re: RegExp): Promise<{ x: number
       if (found || !n) return;
       if (n.nodeName === 'IFRAME') {
         const attrs: string[] = n.attributes ?? [];
-        for (let i = 0; i < attrs.length; i += 2) if (attrs[i] === 'src' && re.test(attrs[i + 1])) found = n;
+        const docUrl: string = n.contentDocument?.documentURL ?? '';
+        for (let i = 0; i < attrs.length; i += 2) if (attrs[i] === 'src' && (match(attrs[i + 1]) || match(docUrl))) found = n;
       }
       for (const c of n.children ?? []) visit(c);
       for (const r of n.shadowRoots ?? []) visit(r);

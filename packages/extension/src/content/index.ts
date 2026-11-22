@@ -3,6 +3,7 @@
  * Every response carries the document nonce so the service worker can tell when a frame's
  * document was replaced (which invalidates its element references).
  */
+import { isChallengeUrl } from '@ba/shared';
 import { docNonce, elementById, localId, composedChildren } from './dom.ts';
 import { buildOutline } from './outline.ts';
 import {
@@ -41,7 +42,7 @@ function allIframes(): HTMLIFrameElement[] {
   return out;
 }
 
-const CAPTCHA_FRAME = /challenges\.cloudflare\.com|recaptcha|hcaptcha|arkoselabs|funcaptcha/i;
+const CAPTCHA_FRAME = { test: (url: string) => isChallengeUrl(url) };
 const CAPTCHA_TEXT = /verify (?:that )?you are (?:a )?human|confirm you are (?:a )?human|checking (?:your browser|if the site connection is secure)|just a moment|attention required|verify you are human|complete the security check|security check/i;
 const CAPTCHA_DONE = /\bsuccess!?\b|verification (?:complete|successful)|you are (?:now )?verified|challenge passed/i;
 
@@ -113,6 +114,13 @@ function visibleRect(r: DOMRect): boolean {
 }
 
 /** Locate the challenge widget in the top frame, or fall back to the whole viewport. */
+/** Is the top-frame point (CSS px) on a real challenge iframe? Guards the helper's direct clicks. */
+function captchaHit(x: number, y: number): { ok: boolean } {
+  if (window !== window.top || !Number.isFinite(x) || !Number.isFinite(y)) return { ok: false };
+  const el = document.elementFromPoint(x, y);
+  return { ok: el instanceof HTMLIFrameElement && isChallengeUrl(el.src) };
+}
+
 function captchaLocate(): { rect: { x: number; y: number; w: number; h: number }; inIframe: boolean } {
   if (window !== window.top) return { rect: { x: 0, y: 0, w: 0, h: 0 }, inIframe: false };
   const frames = allIframes().filter((f) => CAPTCHA_FRAME.test(f.src || ''));
@@ -204,6 +212,8 @@ async function handle(msg: Msg): Promise<unknown> {
       return probeCaptcha();
     case 'ba:captcha_locate':
       return captchaLocate();
+    case 'ba:captcha_hit':
+      return captchaHit(Number(msg.x), Number(msg.y));
     case 'ba:captcha_grid':
       return captchaGrid();
     case 'ba:probe_parent':

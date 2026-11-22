@@ -42,12 +42,12 @@ def window(page: Image.Image, panel: Image.Image, url: str) -> Image.Image:
 
 
 def framed(win: Image.Image, pad: int = 48) -> Image.Image:
-    """Rounded window with a soft shadow on a dusk gradient."""
+    """Rounded window with a soft shadow on a midnight gradient."""
     bg = Image.new("RGB", (win.width + pad * 2, win.height + pad * 2))
     gd = ImageDraw.Draw(bg)
     for y in range(bg.height):
         t = y / bg.height
-        gd.line([0, y, bg.width, y], fill=(int(40 + 60 * t), int(30 + 25 * t), int(70 - 10 * t)))
+        gd.line([0, y, bg.width, y], fill=(int(11 + 20 * t), int(15 + 26 * t), int(23 + 32 * t)))  # midnight gradient
     shadow = Image.new("L", bg.size, 0)
     ImageDraw.Draw(shadow).rounded_rectangle([pad, pad + 10, pad + win.width, pad + win.height + 10], radius=14, fill=150)
     bg.paste(Image.new("RGB", bg.size, "#000000"), (0, 0), shadow.filter(ImageFilter.GaussianBlur(18)))
@@ -68,8 +68,8 @@ def caption(img: Image.Image, text: str) -> Image.Image:
     tw, th = r - l, b - t
     x = (out.width - tw) // 2
     y = img.height - 18 + (extra - th) // 2
-    d.rounded_rectangle([x - 22, y - 14, x + tw + 22, y + th + 16], radius=24, fill="#c0623b")
-    d.text((x - l, y - t), text, fill="#ffffff", font=f)
+    d.rounded_rectangle([x - 22, y - 14, x + tw + 22, y + th + 16], radius=24, fill="#b7f34a")
+    d.text((x - l, y - t), text, fill="#111827", font=f)
     return out
 
 

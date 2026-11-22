@@ -182,3 +182,82 @@ describe('checkUploadPaths', () => {
     expect(checkUploadPaths(['ok.txt'], undefined)).toMatch(/no upload directory/);
   });
 });
+
+describe('reads, embedded frames and key tricks (security sweep)', () => {
+  const ask = () => S({ permissionMode: 'ask' });
+  it('asks before reading a site that was not approved (redirects, popups, back/forward)', () => {
+    for (const m of ['get_page_text', 'read_page', 'screenshot', 'find', 'zoom']) {
+      expect(evaluate(m, {}, page('mail.example'), ask(), fresh()), m).toMatchObject({ kind: 'ask', approvalKind: 'site', site: 'mail.example' });
+    }
+    const st = fresh();
+    st.sessionSites.add('mail.example');
+    expect(evaluate('get_page_text', {}, page('mail.example'), ask(), st).kind).toBe('allow');
+    expect(evaluate('get_page_text', {}, page('mail.example'), S({ permissionMode: 'auto' }), fresh()).kind).toBe('allow');
+    expect(evaluate('wait', {}, page('mail.example'), ask(), fresh()).kind).toBe('allow');
+    expect(evaluate('list_tabs', {}, undefined, ask(), fresh()).kind).toBe('allow');
+  });
+  it('asks before acting inside an embedded frame from an unapproved site', () => {
+    const st = fresh();
+    st.sessionSites.add('shop.example');
+    const d: ActionDescription = { ...page('shop.example', { role: 'button', name: 'Continue', tag: 'button' }), frameUrl: 'https://bank.example/widget' };
+    expect(evaluate('left_click', {}, d, ask(), st)).toMatchObject({ kind: 'ask', approvalKind: 'site', site: 'bank.example' });
+    st.sessionSites.add('bank.example');
+    expect(evaluate('left_click', {}, d, ask(), st).kind).toBe('allow');
+  });
+  it('asks when keys move focus and then press Enter/Space', () => {
+    const field = page('x.com', { role: 'textbox', name: 'Search', tag: 'input' });
+    const auto = S({ permissionMode: 'auto' });
+    for (const text of ['Tab Enter', 'shift+Tab Return', 'Down space', 'Tab Tab Tab Enter']) {
+      expect(evaluate('key', { text }, field, auto, fresh()), text).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+    }
+    expect(evaluate('type', { text: 'abc\t\n' }, field, auto, fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+    expect(evaluate('key', { text: 'Tab' }, field, auto, fresh()).kind).toBe('allow');
+    // Plain Enter in a search field that's part of a form is fine (Enter in a form-less text box asks: chat apps send on Enter).
+    expect(evaluate('key', { text: 'Enter' }, page('x.com', { role: 'textbox', name: 'Search', tag: 'input', formSubmitName: 'Search' }), auto, fresh()).kind).toBe('allow');
+    expect(evaluate('type', { text: 'hello world' }, field, auto, fresh()).kind).toBe('allow');
+    expect(evaluate('key', { text: 'Tab Enter' }, field, S({ permissionMode: 'auto', confirm: { ...DEFAULT_CONFIRM, uninspectable: false, messages: false } }), fresh()).kind).toBe('allow');
+  });
+  it('treats key presses into a password field as typing into it', () => {
+    const pw = page('x.com', { role: 'textbox', name: 'Password', tag: 'input', inputType: 'password', sensitive: true });
+    const auto = S({ permissionMode: 'auto' });
+    expect(evaluate('key', { text: 'h u n t e r' }, pw, auto, fresh())).toMatchObject({ kind: 'ask', category: 'sensitiveFields' });
+    expect(evaluate('key', { text: 'Tab' }, pw, auto, fresh()).kind).toBe('allow');
+  });
+});
+
+describe('security sweep round 2', () => {
+  const auto = S({ permissionMode: 'auto' });
+  const box = (extra: Record<string, unknown> = {}) => page('chat.example', { role: 'textbox', name: 'Message', tag: 'div', ...extra } as any);
+  it('Tab then typing is checked (the field it lands in was never inspected)', () => {
+    const f = page('x.com', { role: 'textbox', name: 'Name', tag: 'input' });
+    expect(evaluate('key', { text: 'Tab 4 1 1 1' }, f, auto, fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+    expect(evaluate('type', { text: 'Jane\t4111111111111111' }, f, auto, fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+    expect(evaluate('type', { text: 'Jane Doe' }, f, auto, fresh()).kind).toBe('allow');
+  });
+  it('Enter in a chat box (no form) and Ctrl/Cmd+Enter count as sending', () => {
+    expect(evaluate('key', { text: 'Enter' }, box(), auto, fresh())).toMatchObject({ kind: 'ask', category: 'messages' });
+    expect(evaluate('type', { text: 'hi there\n' }, box(), auto, fresh())).toMatchObject({ kind: 'ask', category: 'messages' });
+    expect(evaluate('key', { text: 'ctrl+Return' }, page('mail.example', { role: 'textbox', name: 'Body', tag: 'textarea', formSubmitName: 'Save draft' }), auto, fresh())).toMatchObject({ kind: 'ask', category: 'messages' });
+    expect(evaluate('key', { text: 'shift+Enter' }, box(), auto, fresh()).kind).toBe('allow'); // new line, not send
+    expect(evaluate('key', { text: 'Enter' }, box({ role: 'searchbox' }), auto, fresh()).kind).toBe('allow');
+    expect(evaluate('key', { text: 'Enter' }, box(), S({ permissionMode: 'auto', confirm: { ...DEFAULT_CONFIRM, messages: false } }), fresh()).kind).toBe('allow');
+  });
+  it('single-key shortcuts outside text fields are checked', () => {
+    const list = page('mail.example', { role: 'row', name: 'Invoice from ACME', tag: 'tr' });
+    expect(evaluate('key', { text: '#' }, list, auto, fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+    expect(evaluate('key', { text: 'r' }, undefined as any, auto, fresh()).kind).toBe('ask');
+    expect(evaluate('key', { text: 'Escape' }, list, auto, fresh()).kind).toBe('allow');
+    expect(evaluate('key', { text: 'Page_Down' }, list, auto, fresh()).kind).toBe('allow');
+    expect(evaluate('key', { text: 'ctrl+c' }, list, auto, fresh()).kind).toBe('allow');
+    expect(evaluate('key', { text: 'h e l l o' }, page('x.com', { role: 'textbox', name: 'Search', tag: 'input' }), auto, fresh()).kind).toBe('allow');
+    // `type` outside a text field sends the same key events, and Backspace/Alt+key are shortcuts too.
+    expect(evaluate('type', { text: '#' }, list, auto, fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+    expect(evaluate('key', { text: 'BackSpace' }, list, auto, fresh())).toMatchObject({ kind: 'ask' });
+    expect(evaluate('key', { text: 'alt+shift+s' }, list, auto, fresh())).toMatchObject({ kind: 'ask' });
+    expect(evaluate('type', { text: 'hello' }, page('x.com', { role: 'textbox', name: 'Search', tag: 'input' }), auto, fresh()).kind).toBe('allow');
+  });
+  it('reads fail closed when the page could not be identified', () => {
+    const d: ActionDescription = { tabId: 'tab-1', url: '', host: '', unknown: 'tab is gone' };
+    expect(evaluate('get_page_text', {}, d, S({ permissionMode: 'ask' }), fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
+  });
+});

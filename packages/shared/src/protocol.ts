@@ -4,7 +4,16 @@
  */
 import type { BrowserMember } from './tools.ts';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
+
+/** HMAC labels for the mutual handshake (see packages/server/src/pairing.ts). */
+export const AUTH_SERVER_LABEL = 'ba-server:';
+export const AUTH_CLIENT_LABEL = 'ba-client:';
+export const AUTH_WHOAMI_LABEL = 'ba-whoami:';
+/** Pairing derivations (ECDH shared secret -> paired secret, comparison code, confirmation). */
+export const PAIR_SECRET_LABEL = 'ba-pair-secret|';
+export const PAIR_CODE_LABEL = 'ba-pair-code|';
+export const PAIR_CONFIRM_LABEL = 'ba-pair-confirm|';
 
 // ---------------------------------------------------------------------------------------------
 // Tool results produced by the executor (extension)
@@ -63,6 +72,10 @@ export interface ToolCall {
 // ---------------------------------------------------------------------------------------------
 
 export type PermissionMode = 'ask' | 'auto' | 'yolo';
+
+/** Where people get the server and docs. */
+export const PROJECT_URL = 'https://github.com/tmalik22/BrowserExtension';
+export const SERVER_DOWNLOAD_URL = `${PROJECT_URL}/releases/latest`;
 
 /** Kinds of action the user can choose to confirm before the agent does them. */
 export type ConfirmCategory =
@@ -270,7 +283,29 @@ export interface SessionSummary {
 
 /** Extension -> server */
 export type ClientFrame =
-  | { type: 'hello'; token: string; clientId: string; protocol: number; extensionVersion: string; userAgent: string }
+  | {
+      type: 'hello';
+      clientId: string;
+      protocol: number;
+      extensionVersion: string;
+      userAgent: string;
+      /** Mutual handshake: the client's random nonce, and which secret it holds. */
+      clientNonce?: string;
+      keyType?: 'token' | 'paired';
+      /**
+       * No secret yet: start pairing. Commit-then-reveal: SHA-256 (hex) of our ECDH P-256 public
+       * key (raw, base64); the key itself is only sent after the server has sent its own, so
+       * neither side can grind keys to make the two codes match.
+       */
+      pairCommit?: string;
+      /** Legacy/scripts: the raw pairing token (the extension never sends this). */
+      token?: string;
+    }
+  | { type: 'auth'; proof: string }
+  /** Reveals the committed public key, after the server's key arrived. */
+  | { type: 'pair_reveal'; publicKey: string }
+  /** Sent once the user confirmed in the side panel that both codes match. */
+  | { type: 'pair_confirm'; proof: string }
   | { type: 'rpc_result'; id: string; result?: unknown; error?: string }
   | {
       type: 'send_message';
@@ -309,6 +344,10 @@ export type ServerFrame =
       settings: PolicySettings;
     }
   | { type: 'hello_error'; message: string }
+  /** The server's proof that it knows the secret, and its nonce for the client to answer. */
+  | { type: 'challenge'; serverNonce: string; proof: string }
+  /** The server's ECDH public key; both sides now show the same 6-digit code to compare. */
+  | { type: 'pair_pending'; publicKey: string }
   | { type: 'rpc'; id: string; method: RpcMethod; params: Record<string, unknown> }
   | { type: 'agent_event'; sessionId: string; seq: number; event: AgentEvent }
   | { type: 'response'; requestId: string; ok: boolean; error?: string; data?: unknown }

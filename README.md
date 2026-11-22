@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🧭 Browser Agent
+<img src="docs/brand/logo-512.png" alt="Browser Agent logo" width="96">
+
+# Browser Agent
 
 ### Your AI agent in your browser. Your model, your keys, your rules.
 
@@ -8,12 +10,12 @@ An open-source Chrome agent that clicks, types, shops, fills forms and gets past
 Use **any model**: cloud APIs, your own GPU, self-hosted servers, fine-tunes, even uncensored and abliterated models.
 
 [![CI](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml/badge.svg)](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/tmalik22/BrowserExtension?color=c0623b)](https://github.com/tmalik22/BrowserExtension/releases/latest)
+[![Release](https://img.shields.io/github/v/release/tmalik22/BrowserExtension?color=84cc16)](https://github.com/tmalik22/BrowserExtension/releases/latest)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Chrome MV3](https://img.shields.io/badge/Chrome-MV3%20extension-4285F4?logo=googlechrome&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-190%20unit%20%2B%2058%20e2e-brightgreen)
+![Tests](https://img.shields.io/badge/tests-226%20unit%20%2B%2069%20e2e-brightgreen)
 ![Local models](https://img.shields.io/badge/runs%20on-Ollama%20·%20LM%20Studio%20·%20vLLM%20·%20llama.cpp-8A2BE2)
 
 **[Quick start](#-quick-start)** · **[See it in action](#-see-it-in-action)** · **[CAPTCHA helper](#-captcha-helper)** · **[Any model](#-works-with-any-model)** · **[Security](#-security-model)**
@@ -264,25 +266,60 @@ Good local picks have **tool calling** and ideally **vision**: Qwen2.5-VL / Qwen
 
 ## 🚀 Quick start
 
-**You need:** Node 20+ and Chrome 125+.
+Three steps, no coding. You need **Chrome** and **[Node.js 20+](https://nodejs.org/)**.
+
+### 1. Start the server
+
+Download **`browser-agent-server-vX.zip`** from the **[latest release](https://github.com/tmalik22/BrowserExtension/releases/latest)**, unzip it, and run:
+
+| Windows | macOS / Linux |
+|---|---|
+| Double-click **`Start Browser Agent.cmd`** | `./start.sh` in a terminal |
+
+Keep that window open. It's the small local server that runs your model, so keys and pages stay on your computer.
+
+### 2. Add the extension
+
+> **Chrome Web Store:** coming soon. Once it's listed, it'll be a one-click install.
+
+Until then, install it manually: download **`browser-agent-extension-vX.zip`** from the same release and unzip it. Then open `chrome://extensions`, turn on *Developer mode*, click **Load unpacked**, and pick the folder. <table>
+<tr>
+<td width="60%" valign="top">
+
+Open the side panel (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd>) and click **Pair this browser**. The panel and the server window both show a **6-digit code**. If they match, click **Codes match** in the panel and type `y` in the server window.
+
+That's it: no tokens to copy. The two codes matching proves you're connected to *your* server and nothing in between.
+
+</td>
+<td width="40%" valign="top"><img src="docs/screenshots/panel-pairing.png" alt="Side panel pairing card showing a 6-digit code with Codes match and Cancel buttons"></td>
+</tr>
+</table>
+
+### 3. Pick a model and go
+
+- **Ollama or LM Studio running?** Your installed models show up in the model menu automatically.
+- **Cloud model?** Paste your API key in the side panel under **⚙ Settings → API keys**.
+
+Open any site, type a task, and press <kbd>Enter</kbd>. 🎉 If the server isn't running, the side panel shows you how to start it.
+
+> 💡 For anything sensitive, use a separate Chrome profile without your logins.
+
+<details>
+<summary><b>Run from source (developers)</b></summary>
+
+<br>
 
 ```bash
 git clone https://github.com/tmalik22/BrowserExtension.git
 cd BrowserExtension
 npm install
-npm run build:ext
+npm run build        # builds the extension into packages/extension/dist and typechecks
+npm run server       # or double-click Start Browser Agent.cmd
 ```
 
-| Step | |
-|---|---|
-| **1. Models** | Copy `models.example.json` to `models.json` and keep the profiles you want. Local servers need no key. |
-| **2. Keys** *(cloud only)* | Paste them in the side panel under **⚙ Settings → API keys**, or copy `.env.example` to `.env`. They're stored by the server in `data/keys.json` and never sent back to the browser. |
-| **3. Start** | Run `npm run server`. It prints a **pairing token**. On Windows, just double-click **`Start Browser Agent.cmd`**. |
-| **4. Load** | Open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked*, and pick `packages/extension/dist`. |
-| **5. Pair** | Click the extension icon (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd>), open ⚙ Settings, paste the token, and click *Save & connect*. |
-| **6. Go** | Open any site, type a task, pick a model, and press <kbd>Enter</kbd>. 🎉 |
+Load `packages/extension/dist` unpacked and paste the token. `npm run release` builds all three downloads into `release/`: the server zip, the unpacked-extension zip, and the Chrome Web Store zip (which leaves out `javascript_exec`).
 
-> 💡 For anything sensitive, use a separate Chrome profile without your logins.
+</details>
 
 ---
 
@@ -374,7 +411,7 @@ Permission mode, the **"Ask me before…" approval switches**, allowed and block
 
 <br>
 
-See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (default `127.0.0.1:7878`), a fixed `AGENT_TOKEN`, `AGENT_DEFAULT_PROFILE`, `AGENT_EXTENSION_IDS` (restricts which extensions may connect), `AGENT_EXTRA_INSTRUCTIONS`, `AGENT_TRANSCRIPTS=0` (don't save transcripts) and `BA_GPU=0` (no GPU monitor).
+See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (default `127.0.0.1:7878`), a fixed `AGENT_TOKEN`, `AGENT_DEFAULT_PROFILE`, `AGENT_EXTENSION_IDS` (restricts which extensions may connect), `AGENT_ALLOWED_HOSTS` (extra hostnames the server answers to, for remote setups), `AGENT_DETECT_LOCAL=0` (don't auto-detect Ollama / LM Studio models), `AGENT_EXTRA_INSTRUCTIONS`, `AGENT_TRANSCRIPTS=0` (don't save transcripts) and `BA_GPU=0` (no GPU monitor).
 
 </details>
 
@@ -389,12 +426,22 @@ See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (
   - Accepting a page's `confirm()` or `prompt()` needs approval. Navigating away dismisses them rather than answering "yes".
 - **The extension applies the URL policy to every action**, including reads, tabs a page opened, and iframes. Document requests in the agent's tabs are checked before they're sent.
 - **Keys stay on the server.** It listens on `127.0.0.1`, requires the pairing token (timing-safe comparison), rejects WebSocket connections from web origins, and has no CORS. The extension never sees your keys.
+- **Pairing and mutual authentication.** Pairing only starts when you click **Pair this browser**. The extension and server do a key exchange, and each side works out the shared secret itself, so it never travels over the connection. Both then show the same 6-digit code, and you confirm it in the panel *and* in the server window. After that, every connection runs a challenge-response handshake: the server must prove it holds the secret *before* the extension reveals anything or accepts a single command. A program squatting on the server's port can't take over the browser, a rogue program can't pair itself without you seeing a code that doesn't match, and web pages can't talk to the server at all. Pasting the server's token instead of pairing works the same way.
+- **No DNS rebinding.** The server only answers requests addressed to `127.0.0.1`/`localhost`, and rejects WebSocket connections from web pages.
+- **Reading counts too.** In *Ask* mode the agent needs your OK for a site before it **reads** it, not just before it acts there. A page you allowed can't redirect or pop up to another site (say, your email) and have it read without asking. Clicks inside embedded frames from other sites need that site's approval too.
+- **No keyboard tricks.** Key sequences that move focus and then press Enter, Space or type (like Tab, Enter) need approval, because the control they'd reach can't be checked first. Enter in a chat box (how chat apps send), Ctrl/Cmd+Enter (how mail apps send) and single-key shortcuts outside text fields (like `#`, which deletes in some mail apps) are checked too.
+- **The CAPTCHA helper** (off by default) only acts on genuine challenge widgets from the real providers (by hostname, not a URL that merely mentions "captcha"). It checks right before every click that the click lands on the widget itself, not something a page placed on top, and it refuses on blocked or private sites.
+- **No leaked keys.** API keys that a provider echoes back in an error message are masked before they reach the panel or logs. Links in the panel are https-only and always show their real destination.
 - **No telemetry.** The server only talks to the model endpoints you configure.
 - Credential-like URL parameters are redacted before reaching the model, and typed passwords are masked in page reads and logs.
 - **Local transcripts.** Each task is saved to `data/sessions/` on your machine (messages, actions, page text and screenshots). This powers chat history and is never uploaded. Delete the folder any time, or set `AGENT_TRANSCRIPTS=0` (chat history is then off too).
 - Chrome shows a "started debugging this browser" bar while the agent is attached. Extensions can't hide it, and clicking *Cancel* stops the task.
 
-**Known limits:** hostnames that *resolve* to private addresses (e.g. `127.0.0.1.nip.io`) aren't detected, and cross-process iframe navigations aren't intercepted at request time (their content is still withheld).
+**Known limits** (nothing is perfectly secure, so here is what we know about):
+- Hostnames that *resolve* to private addresses (e.g. `127.0.0.1.nip.io`) aren't detected. Cross-process iframe navigations aren't intercepted at request time, though their content is still withheld.
+- When you approve a site in *Ask* mode, content that site **embeds** from other sites (iframes) can appear in what the agent reads. Acting inside those frames still needs their own approval.
+- A page that has already been approved could try to trick the model into putting data into a link to that same site. Prompt-injection defences reduce this, but no agent can rule it out completely. For sensitive accounts, use a separate Chrome profile.
+- For remote setups (`AGENT_ALLOWED_HOSTS`), put the server behind TLS (`wss://`).
 
 ---
 
@@ -427,8 +474,8 @@ Design notes and trade-offs: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 ## 🧪 Testing
 
 ```bash
-npm test             # 190 unit + integration tests: policy, providers vs fake APIs, agent loop, server
-npm run test:e2e     # 58 browser tests: real Chromium + extension + server + fixture site
+npm test             # 226 unit + integration tests: policy, providers vs fake APIs, agent loop, server
+npm run test:e2e     # 69 browser tests: real Chromium + extension + server + fixture site
 npm run test:all
 npm run eval -- --profile openrouter            # live evals with a real model (costs tokens)
 npm run eval -- --profile ollama --task long-list --repeat 3

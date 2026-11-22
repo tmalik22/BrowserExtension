@@ -1,4 +1,6 @@
-import { loadConfig, profileInfo, type ServerConfig } from './config.ts';
+import { loadConfig, profileAvailability, profileInfo, type ServerConfig } from './config.ts';
+import { detectLocalModels, mergeDetected } from './local-models.ts';
+import { consolePairPrompter, newNonce, safeEqualHex, whoamiProof } from './pairing.ts';
 import { AgentServer } from './server.ts';
 
 /**
@@ -18,6 +20,17 @@ export async function listenReplacingOld(server: AgentServer, config: ServerConf
     .catch(() => null)) as { ok?: boolean; version?: string } | null;
   if (!health?.ok || !health.version) {
     throw new Error(`Port ${config.port} is used by another program, so the agent server can't start. Close that program, or set AGENT_PORT in .env to a free port (and update the server URL in the extension's settings).`);
+  }
+  // Only hand the token to a server that proves it already holds it (not a program squatting on the port).
+  const nonce = newNonce();
+  const who = (await fetch(`${base}/whoami?nonce=${nonce}`, { signal: AbortSignal.timeout(3000) })
+    .then((r) => r.json())
+    .catch(() => null)) as { proof?: string } | null;
+  if (!who?.proof || !safeEqualHex(who.proof, whoamiProof(config.token, nonce))) {
+    throw new Error(
+      `Port ${config.port} is used by a program that isn't this Browser Agent server (or one with a different data folder), so it won't be stopped automatically. ` +
+        'Close it, or set AGENT_PORT in .env to a free port (and update the server URL in the extension settings).',
+    );
   }
   log(`  An older agent server is still running on port ${config.port}. Replacing it…`);
   const res = await fetch(`${base}/api/shutdown`, {
@@ -45,6 +58,13 @@ export async function listenReplacingOld(server: AgentServer, config: ServerConf
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  // Show models already installed in Ollama / LM Studio without any models.json editing.
+  if (process.env.AGENT_DETECT_LOCAL !== '0') {
+    const found = await detectLocalModels(config.profiles);
+    const merged = mergeDetected(config.profiles, config.defaultProfileId, found, (p) => profileAvailability(p).available);
+    config.profiles = merged.profiles;
+    config.defaultProfileId = merged.defaultProfileId;
+  }
   let server: AgentServer;
   const shutdown = async (why = '') => {
     console.log(`\nShutting down${why}…`);
@@ -56,6 +76,7 @@ async function main(): Promise<void> {
     // AGENT_TRANSCRIPTS=0: don't save session transcripts/screenshots to data/sessions (also disables chat history).
     transcripts: process.env.AGENT_TRANSCRIPTS !== '0',
     onShutdownRequest: () => void shutdown(' (a newer agent server is taking over)'),
+    pairPrompt: consolePairPrompter(),
   });
   const port = await listenReplacingOld(server, config);
   const profiles = config.profiles.map(profileInfo);
@@ -64,10 +85,17 @@ async function main(): Promise<void> {
     `  Browser agent server listening on http://${config.host}:${port}  (WebSocket: ws://${config.host}:${port}/ws)`,
     '',
     `  Pairing token:  ${config.token}`,
-    '  Paste it into the extension side panel → Settings → Pairing token.',
+    process.stdin.isTTY
+      ? '  To pair a browser: open the side panel, then approve the code it shows when this window asks.\n  (Or paste the token above into the side panel → Settings → Pairing token.)'
+      : '  Paste it into the extension side panel → Settings → Pairing token.',
     '',
-    '  Model profiles:',
-    ...profiles.map((p) => `    ${p.available ? '✓' : '✗'} ${p.id.padEnd(22)} ${p.label}${p.available ? '' : `  (${p.unavailableReason})`}${p.id === config.defaultProfileId ? '  [default]' : ''}`),
+    '  Models ready to use:',
+    ...profiles.filter((p) => p.available).map((p) => `    ✓ ${p.label}${p.id === config.defaultProfileId ? '  [default]' : ''}`),
+    ...(() => {
+      const missing = profiles.filter((p) => !p.available);
+      return missing.length ? [`    + ${missing.length} more need an API key: add it in the side panel → Settings → API keys.`] : [];
+    })(),
+    ...(config.profiles.some((p) => p.detected) ? [] : ['    Tip: install Ollama or LM Studio and your local models appear here automatically.']),
     '',
     `  Transcripts: ${config.dataDir}`,
     process.env.BA_GPU === '0' ? '  GPU monitor: off (BA_GPU=0)' : '  GPU monitor: on (alerts print here and in the side panel)',

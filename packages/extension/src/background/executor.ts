@@ -6,6 +6,7 @@ import {
   TAB_MEMBERS,
   checkUrlPolicy,
   hostOf,
+  isChallengeUrl,
   parseNavigateUrl,
   sanitizeTitle,
   sanitizeUrl,
@@ -100,7 +101,7 @@ export async function execute(p: ExecuteParams): Promise<ToolResult> {
       if (e) throw err(`${tabIdStr(tabId)} is on ${hostOf(tabUrl)}, which is not allowed (${e.replace(/^Error: /, '')}). Navigate elsewhere or close the tab.`);
     }
     // The action was approved for a specific document: refuse if the page changed meanwhile.
-    if (p.expectDocKey && member !== 'navigate' && ACTING.has(member)) {
+    if (p.expectDocKey && member !== 'navigate' && (ACTING.has(member) || PAGE_READS.has(member))) {
       const now = await docKey(tabId).catch(() => '');
       if (now && now !== p.expectDocKey) throw err('the page changed (navigated or reloaded) after this action was checked. Observe the page again before acting.');
     }
@@ -118,7 +119,13 @@ export async function execute(p: ExecuteParams): Promise<ToolResult> {
   }
 }
 
-const CAPTCHA_URL = /challenges\.cloudflare\.com|challenges\.cloudflare\.com\/turnstile|recaptcha|hcaptcha|arkoselabs|funcaptcha|\/cdn-cgi\/challenge-platform/i;
+/** Challenge provider frames (exact hosts) or a Cloudflare interstitial page. */
+/** Reads the server checks site permission for; they must run on the document that was checked. */
+const PAGE_READS = new Set<string>(['screenshot', 'zoom', 'read_page', 'find', 'get_page_text', 'read_console', 'read_network']);
+
+const CAPTCHA_URL = { test: (url: string) => isChallengeUrl(url) || /\/cdn-cgi\/challenge-platform\//.test(url) };
+/** A real challenge widget is small; a bigger "widget" region is refused for direct clicks. */
+const CAPTCHA_MAX = { w: 640, h: 720 };
 const CAPTCHA_TITLE = /just a moment|attention required|verify you are human|checking your browser|security check/i;
 
 function captchaKind(u: string, t: string): CaptchaProbe['kind'] {
@@ -198,7 +205,7 @@ export async function captchaObserve(p: { sessionId: string; tab_id?: string }):
   const challengeFrame = frames.find((f) => CAPTCHA_URL.test(f.url));
   // Some widgets live in a closed shadow root the top-frame scan cannot see; use the DOM domain.
   if (!loc.inIframe && challengeFrame) {
-    const box = await iframeRect(tabId, CAPTCHA_URL);
+    const box = await iframeRect(tabId, isChallengeUrl);
     if (box && box.w > 10 && box.h > 10) {
       region = box;
       located = true;
@@ -219,6 +226,7 @@ export async function captchaObserve(p: { sessionId: string; tab_id?: string }):
     region = { x: 0, y: 0, w: vp.width, h: vp.height };
     located = false;
   }
+  if (region.w > CAPTCHA_MAX.w || region.h > CAPTCHA_MAX.h) located = false;
   region = {
     x: Math.max(0, Math.min(vp.width - 1, region.x)),
     y: Math.max(0, Math.min(vp.height - 1, region.y)),
@@ -272,11 +280,17 @@ export async function captchaAction(p: {
     y: Math.max(0, Math.min(obs.region.y + obs.region.h - 1, obs.region.y + (Math.max(0, Math.min(1000, y)) / 1000) * obs.region.h)),
   });
   const center = { x: obs.region.x + obs.region.w / 2, y: obs.region.y + obs.region.h / 2 };
+  // Every point must land on the challenge iframe itself (not something the page laid over it).
+  const onChallenge = async (q: { x: number; y: number }) => {
+    const r = await frameCall<{ ok: boolean }>(tabId, 0, { type: 'ba:captcha_hit', x: q.x, y: q.y }, 3000).catch(() => null);
+    if (!r?.result?.ok) throw err('that point is not on the challenge widget; refusing to click there.');
+  };
   let message = '';
   if (plan.action === 'click') {
     const points = plan.points.filter((q) => Array.isArray(q) && q.length === 2).map(([x, y]) => pt(Number(x), Number(y)));
     if (!points.length) throw err('the plan had no click points.');
     for (const q of points) {
+      await onChallenge(q); // right before each click: the page may react to the previous one
       await click(tabId, q.x, q.y, 'left', 1, 0, 90);
       await sleep(120);
     }
@@ -287,6 +301,7 @@ export async function captchaAction(p: {
     if (!cells.length) throw err('the plan had no valid cells.');
     for (const n of cells) {
       const c = obs.grid.cells[n - 1];
+      await onChallenge({ x: c.x + c.w / 2, y: c.y + c.h / 2 });
       await click(tabId, c.x + c.w / 2, c.y + c.h / 2, 'left', 1, 0, 90);
       await sleep(140);
     }
@@ -295,11 +310,14 @@ export async function captchaAction(p: {
     for (const d of plan.drags ?? []) {
       const from = d.from?.length === 2 ? pt(Number(d.from[0]), Number(d.from[1])) : { x: center.x, y: center.y + obs.region.h * 0.3 };
       const to = pt(Number(d.to?.[0]), Number(d.to?.[1]));
+      await onChallenge(from);
+      await onChallenge(to);
       await drag(tabId, from, to);
       await sleep(200);
     }
     message = `Dragged ${(plan.drags ?? []).length} item(s).`;
   } else if (plan.action === 'type') {
+    await onChallenge(center);
     await click(tabId, center.x, center.y, 'left', 1, 0, 60);
     await sleep(80);
     await typeText(tabId, String(plan.text ?? ''));
@@ -310,6 +328,10 @@ export async function captchaAction(p: {
   await settle(tabId, { maxMs: 1500 });
   captchaObs.delete(tabId);
   return { ok: true, message };
+}
+
+function storeUnavailable(member: string): never {
+  throw err(`${member} isn't available in the Chrome Web Store version of Browser Agent.`);
 }
 
 function errorResult(e: unknown): ToolResult {
@@ -475,7 +497,8 @@ async function run(ctx: Ctx, member: BrowserMember): Promise<ResultBlock[]> {
       return text(lines.length ? truncate(lines.join('\n'), OUTPUT_CAP) : 'No new network requests since the last read.');
     }
     case 'javascript_exec':
-      return text(await jsExec(ctx));
+      // Compiled out of the Chrome Web Store build (constant-folded, so jsExec isn't bundled there).
+      return __BA_STORE__ ? storeUnavailable(member) : text(await jsExec(ctx));
     default:
       throw err(`${member} is not implemented by this executor.`);
   }

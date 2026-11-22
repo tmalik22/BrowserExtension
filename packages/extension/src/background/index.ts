@@ -58,7 +58,7 @@ function broadcast(msg: unknown): void {
 
 function connMessage() {
   const cfg = bridge.getConfig();
-  return { type: 'conn', state: bridge.state, error: bridge.lastError, serverUrl: cfg?.serverUrl ?? '', hasToken: !!cfg?.token };
+  return { type: 'conn', state: bridge.state, error: bridge.lastError, serverUrl: cfg?.serverUrl ?? '', hasToken: !!cfg?.token, pairCode: bridge.pairCode, pairConfirmed: bridge.pairConfirmed };
 }
 
 async function onRpc(method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -147,6 +147,18 @@ async function handlePanel(port: chrome.runtime.Port, msg: PanelMsg): Promise<vo
         break;
       case 'panel:config':
         await bridge.setConfig({ serverUrl: msg.serverUrl, token: msg.token });
+        reply(true);
+        break;
+      case 'panel:pair':
+        await bridge.startPairing();
+        reply(true);
+        break;
+      case 'panel:pair_confirm':
+        bridge.confirmPairing();
+        reply(true);
+        break;
+      case 'panel:pair_cancel':
+        bridge.cancelPairing();
         reply(true);
         break;
       case 'panel:reconnect':
@@ -239,8 +251,11 @@ async function handlePanel(port: chrome.runtime.Port, msg: PanelMsg): Promise<vo
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'sidepanel') return;
-  // Only our own extension pages may connect.
-  if (port.sender?.id !== chrome.runtime.id) {
+  // Only our side panel page may connect. Content scripts share our extension id, so also require
+  // the side panel's own URL (a content script reports the web page's URL): a compromised renderer
+  // could otherwise approve actions or repoint the server URL.
+  const url = port.sender?.url ?? '';
+  if (port.sender?.id !== chrome.runtime.id || !url.startsWith(chrome.runtime.getURL('sidepanel.html'))) {
     port.disconnect();
     return;
   }

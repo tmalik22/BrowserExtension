@@ -155,3 +155,44 @@ describe('summarizeCall', () => {
     expect(summarizeCall('left_click', { target: { type: 'coordinate', x: 1, y: 2 } })).toBe('left click (1, 2)');
   });
 });
+
+describe('security helpers', () => {
+  it('recognises real challenge providers by host, not by substring', async () => {
+    const { isChallengeUrl } = await import('@ba/shared');
+    for (const u of ['https://challenges.cloudflare.com/cdn-cgi/challenge-platform/x', 'https://www.google.com/recaptcha/api2/anchor', 'https://www.recaptcha.net/recaptcha/api2/bframe', 'https://newassets.hcaptcha.com/captcha/v1/x', 'https://client-api.arkoselabs.com/fc/gc/']) {
+      expect(isChallengeUrl(u), u).toBe(true);
+    }
+    for (const u of ['https://evil.example/recaptcha.html', 'https://hcaptcha.com.evil.example/', 'https://evil.example/?u=challenges.cloudflare.com', 'https://www.google.com/search?q=recaptcha', 'javascript:alert(1)', 'not a url']) {
+      expect(isChallengeUrl(u), u).toBe(false);
+    }
+  });
+  it('masks key-shaped strings in error text', async () => {
+    const { redactSecrets } = await import('@ba/shared');
+    const out = redactSecrets('401: Incorrect API key provided: sk-proj-AbCdEfGhIjKlMnOpQrStUv. Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123');
+    expect(out).not.toContain('IjKlMnOpQrStUv');
+    expect(out).not.toContain('abcdefghijklmnopqrstuvwxyz0123');
+    expect(out).toContain('sk-proj-AbCd…');
+    expect(redactSecrets('nvapi-1234567890abcdefghij and AIzaSyA1234567890abcdefghij')).toBe('nvapi-1234… and AIzaSyA1…');
+  });
+});
+
+describe('secret masking and settings lock', () => {
+  it('masks registered secrets verbatim, whatever their format', async () => {
+    const { registerSecret, redactSecrets } = await import('@ba/shared');
+    registerSecret('nanoKEY12345abcdefXYZ');
+    expect(redactSecrets('Invalid key nanoKEY12345abcdefXYZ for this account')).toBe('Invalid key nano… for this account');
+    registerSecret('short'); // too short to register safely
+    expect(redactSecrets('a short word')).toBe('a short word');
+  });
+  it('clients cannot change where file_upload reads from', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { SettingsStore } = await import('../src/config.ts');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ba-up2-'));
+    const store = new SettingsStore(dir);
+    const before = store.get().uploadDir;
+    expect(store.update({ uploadDir: os.homedir(), maxSteps: 12 } as any).uploadDir).toBe(before);
+    expect(store.get().maxSteps).toBe(12);
+  });
+});

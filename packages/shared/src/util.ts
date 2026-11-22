@@ -82,6 +82,46 @@ export function hostMatches(host: string, site: string): boolean {
   return h === s || h.endsWith('.' + s);
 }
 
+/**
+ * Is this URL a real CAPTCHA / challenge provider frame (Cloudflare Turnstile and challenges,
+ * Google reCAPTCHA, hCaptcha, Arkose)? Exact hosts and paths: a page can't pass by putting
+ * "recaptcha" in its own URL.
+ */
+export function isChallengeUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  const h = u.hostname.toLowerCase();
+  const under = (d: string) => h === d || h.endsWith(`.${d}`);
+  if (h === 'challenges.cloudflare.com') return true;
+  if ((h === 'www.google.com' || h === 'google.com' || under('recaptcha.net')) && u.pathname.startsWith('/recaptcha/')) return true;
+  if (under('hcaptcha.com')) return true;
+  if (under('arkoselabs.com') || under('funcaptcha.com')) return true;
+  return false;
+}
+
+/**
+ * Mask anything that looks like an API key or bearer token (some providers echo the key back in
+ * error messages); keeps the first 4 characters so the user can tell which key it was.
+ */
+const knownSecrets = new Set<string>();
+
+/** Remember a secret (API key, token) so redactSecrets masks it verbatim, whatever its format. */
+export function registerSecret(secret: string | undefined): void {
+  if (secret && secret.length >= 8) knownSecrets.add(secret);
+}
+
+export function redactSecrets(s: string): string {
+  for (const k of knownSecrets) if (s.includes(k)) s = s.split(k).join(`${k.slice(0, 4)}…`);
+  return s
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, '$1***')
+    .replace(/\b(sk-ant-[A-Za-z0-9_-]{4}|sk-or-[A-Za-z0-9_-]{4}|sk-proj-[A-Za-z0-9_-]{4}|sk-[A-Za-z0-9]{4}|nvapi-[A-Za-z0-9_-]{4}|gsk_[A-Za-z0-9]{4}|AIza[A-Za-z0-9_-]{4}|xai-[A-Za-z0-9]{4})[A-Za-z0-9_-]{8,}/g, '$1…');
+}
+
 export function hostOf(url: string): string {
   try {
     return new URL(url).hostname.toLowerCase();

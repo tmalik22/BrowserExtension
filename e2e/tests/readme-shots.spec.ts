@@ -198,3 +198,24 @@ test('settings and GPU monitor', async () => {
   });
   await panel.locator('#view-settings section', { hasText: 'CAPTCHA helper' }).screenshot({ path: path.join(OUT, 'panel-captcha-setting.png') });
 });
+
+test('pairing card', async () => {
+  test.skip(!process.env.SHOTS, 'README screenshots only');
+  const serverUrl = `ws://127.0.0.1:${((env.server as any).httpServer.address() as { port: number }).port}/ws`;
+  const setConfig = (cfg: { serverUrl: string; token: string }) =>
+    env.sw.evaluate(async (c) => {
+      await (globalThis as any).__ba.bridge.setConfig(c);
+    }, cfg);
+  (env.server as any).pairPrompt = () => new Promise<boolean>(() => {});
+  try {
+    const panel = await openPanel();
+    await setConfig({ serverUrl, token: '' });
+    await panel.locator('#setup').getByRole('button', { name: 'Pair this browser' }).click();
+    await expect(panel.locator('#setup .pair-code')).toHaveText(/^\d{6}$/);
+    await scrub(panel);
+    await panel.screenshot({ path: path.join(OUT, 'panel-pairing.png'), clip: { x: 0, y: 0, width: 420, height: 292 } });
+  } finally {
+    (env.server as any).pairPrompt = undefined;
+    await setConfig({ serverUrl, token: 'e2e-token' });
+  }
+});

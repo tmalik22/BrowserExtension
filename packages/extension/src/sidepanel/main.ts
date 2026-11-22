@@ -2,7 +2,7 @@
  * Side panel: chat with the agent, live tool activity, approvals, and settings.
  * All model/page-derived text is rendered with textContent / DOM nodes (never as HTML).
  */
-import { CONFIRM_CATEGORIES, DEFAULT_CONFIRM, type AgentEvent, type ApiKeyInfo, type ConfirmSettings, type PolicySettings, type ProfileInfo, type SessionSummary } from '@ba/shared';
+import { CONFIRM_CATEGORIES, DEFAULT_CONFIRM, SERVER_DOWNLOAD_URL, type AgentEvent, type ApiKeyInfo, type ConfirmSettings, type PolicySettings, type ProfileInfo, type SessionSummary } from '@ba/shared';
 import { initKeys, renderKeys } from './keys.ts';
 import { initGpu, renderGpu } from './gpu.ts';
 import { fillRecent, initHistory, showHistoryList } from './history.ts';
@@ -47,6 +47,8 @@ const state = {
   connError: '',
   serverUrl: '',
   hasToken: false,
+  pairCode: '',
+  pairConfirmed: false,
   profiles: [] as ProfileInfo[],
   apiKeys: undefined as ApiKeyInfo[] | undefined,
   defaultProfileId: '',
@@ -82,18 +84,28 @@ function scrollDown(): void {
 // ---------------------------------------------------------------------------------------------
 
 function inline(text: string, parent: HTMLElement): void {
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\((https?:\/\/[^\s)]+)\))/g;
+  // Links: https only, and the real destination is always visible (no text/URL mismatch tricks).
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\((https:\/\/[^\s)]+)\))/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index! > last) parent.append(text.slice(last, m.index));
     if (m[1]) parent.append(el('code', undefined, m[1].slice(1, -1)));
     else if (m[2]) parent.append(el('strong', undefined, m[2].slice(2, -2)));
     else if (m[3]) {
-      const a = el('a', undefined, m[3].slice(1, m[3].indexOf(']')));
+      const label = m[3].slice(1, m[3].indexOf(']'));
+      const a = el('a', undefined, label);
       a.href = m[4];
+      a.title = m[4];
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       parent.append(a);
+      let host = '';
+      try {
+        host = new URL(m[4]).hostname;
+      } catch {
+        /* the regex only admits https URLs */
+      }
+      if (host && !label.toLowerCase().includes(host.toLowerCase())) parent.append(el('span', 'link-host', ` (${host})`));
     }
     last = m.index! + m[0].length;
   }
@@ -408,6 +420,8 @@ function onMessage(msg: any): void {
       state.connError = msg.error;
       state.serverUrl = msg.serverUrl;
       state.hasToken = msg.hasToken;
+      state.pairCode = msg.pairCode ?? '';
+      state.pairConfirmed = !!msg.pairConfirmed;
       renderConn();
       break;
     case 'gpu':
@@ -444,21 +458,114 @@ function onMessage(msg: any): void {
   }
 }
 
+/** First-run / offline guide shown in the chat view instead of an error. */
+function renderSetup(): void {
+  const box = $('setup');
+  const offline = state.conn === 'disconnected';
+  const needsToken = state.conn === 'unconfigured';
+  const pairing = state.conn === 'pairing';
+  box.classList.toggle('hidden', !offline && !needsToken && !pairing);
+  if (!offline && !needsToken && !pairing) return;
+  const link = (text: string, href: string) => {
+    const a = el('a', undefined, text);
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    return a;
+  };
+  const step = (...parts: (string | Node)[]) => {
+    const li = el('li');
+    li.append(...parts);
+    return li;
+  };
+  const btn = (text: string, primary: boolean, onclick: () => void) => {
+    const b = el('button', primary ? 'btn primary' : 'btn', text);
+    b.type = 'button';
+    b.onclick = onclick;
+    return b;
+  };
+  const row = el('div', 'row');
+  if (offline) {
+    const steps = el('ol');
+    steps.append(
+      step(link('Download the Browser Agent server', SERVER_DOWNLOAD_URL), ' and unzip it.'),
+      step('Run ', el('code', undefined, 'Start Browser Agent.cmd'), ' (Windows) or ', el('code', undefined, './start.sh'), ' (macOS/Linux). It needs ', link('Node.js 20+', 'https://nodejs.org/'), '.'),
+      step('Keep its window open. This panel connects by itself.'),
+    );
+    row.append(
+      btn('Retry now', true, () => void request({ type: state.hasToken ? 'panel:reconnect' : 'panel:pair' }).catch(() => {})),
+      btn('Settings', false, () => showSettings(true)),
+    );
+    box.replaceChildren(
+      el('h2', undefined, 'Start the agent server'),
+      el('p', undefined, 'Browser Agent runs your model through a small server on this computer, so your keys and pages stay local.'),
+      steps,
+      row,
+      el('div', 'status-line', state.connError || `Looking for the server at ${state.serverUrl}…`),
+    );
+  } else if (pairing) {
+    if (!state.pairCode) {
+      box.replaceChildren(el('h2', undefined, 'Pairing…'), el('p', undefined, 'Talking to the server…'));
+      return;
+    }
+    const code = el('div', 'pair-code', state.pairCode);
+    code.setAttribute('aria-label', `Pairing code ${state.pairCode.split('').join(' ')}`);
+    if (!state.pairConfirmed) {
+      row.append(
+        btn('Codes match', true, () => void request({ type: 'panel:pair_confirm' }).catch(() => {})),
+        btn('Cancel', false, () => void request({ type: 'panel:pair_cancel' }).catch(() => {})),
+      );
+      box.replaceChildren(
+        el('h2', undefined, 'Check the pairing code'),
+        el('p', undefined, 'Does the Browser Agent server window you started yourself show this same code? Only continue if it does.'),
+        code,
+        row,
+      );
+    } else {
+      row.append(btn('Cancel', false, () => void request({ type: 'panel:pair_cancel' }).catch(() => {})));
+      box.replaceChildren(
+        el('h2', undefined, 'Almost there'),
+        el('p', undefined, 'Now type y in the server window and press Enter to finish pairing.'),
+        code,
+        row,
+      );
+    }
+  } else {
+    const steps = el('ol');
+    steps.append(
+      step(link('Download and start the Browser Agent server', SERVER_DOWNLOAD_URL), ' if it isn’t running yet.'),
+      step('Click ', el('strong', undefined, 'Pair this browser'), ' and compare the code with the server window.'),
+    );
+    row.append(
+      btn('Pair this browser', true, () => void request({ type: 'panel:pair' }).catch(() => {})),
+      btn('Paste a token', false, () => showSettings(true)),
+    );
+    const parts: Node[] = [el('h2', undefined, 'Connect to your server'), steps, row];
+    if (state.connError) parts.push(el('div', 'status-line', state.connError));
+    box.replaceChildren(...parts);
+  }
+}
+
 function renderConn(): void {
   const c = $('conn');
   c.className = `conn ${state.conn}`;
-  const labels: Record<string, string> = { connected: 'Connected', connecting: 'Connecting…', disconnected: 'Offline', error: 'Error', unconfigured: 'Not paired' };
+  const labels: Record<string, string> = { connected: 'Connected', connecting: 'Connecting…', pairing: 'Pairing…', disconnected: 'Offline', error: 'Error', unconfigured: 'Not paired' };
   c.querySelector('.conn-label')!.textContent = labels[state.conn] ?? state.conn;
   c.title = state.connError || `Agent server: ${state.serverUrl}`;
   const banner = $('banner');
-  if (state.conn === 'connected' || state.conn === 'connecting') banner.classList.add('hidden');
+  renderSetup();
+  // "Server not running" and "needs a token" get the setup card; real errors get the banner.
+  if (state.conn !== 'error') banner.classList.add('hidden');
   else {
     banner.classList.remove('hidden');
     banner.replaceChildren(el('span', undefined, state.connError || 'Not connected to the agent server.'));
-    const b = el('button', 'btn', state.conn === 'unconfigured' ? 'Open settings' : 'Settings');
+    const b = el('button', 'btn', 'Settings');
     b.type = 'button';
     b.onclick = () => showSettings(true);
-    banner.append(b);
+    const again = el('button', 'btn', 'Pair again');
+    again.type = 'button';
+    again.onclick = () => void request({ type: 'panel:pair' }).catch(() => {});
+    banner.append(again, b);
   }
   $('conn-detail').textContent = state.conn === 'connected' ? 'Connected.' : state.connError;
   $<HTMLButtonElement>('btn-send').disabled = state.conn !== 'connected';
@@ -684,6 +791,8 @@ function fillSettings(): void {
   $<HTMLInputElement>('set-autoshot').checked = s.autoScreenshot;
   $<HTMLInputElement>('set-lock').checked = s.lockUserInput;
   $<HTMLInputElement>('set-js').checked = s.enableOptional.javascript_exec;
+  // The Chrome Web Store build doesn't include javascript_exec.
+  $('set-js').closest('label')?.classList.toggle('hidden', __BA_STORE__);
   $<HTMLInputElement>('set-upload').checked = s.enableOptional.file_upload;
   $<HTMLInputElement>('set-console').checked = s.enableOptional.read_console;
   $<HTMLInputElement>('set-network').checked = s.enableOptional.read_network;

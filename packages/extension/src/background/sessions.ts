@@ -65,7 +65,7 @@ async function ensureGroup(s: AgentSession, tabId: number): Promise<void> {
   try {
     if (s.groupId === undefined) {
       s.groupId = await chrome.tabs.group({ tabIds: [tabId] });
-      await chrome.tabGroups.update(s.groupId, { title: `Agent: ${s.title.slice(0, 24)}`, color: 'orange', collapsed: false });
+      await chrome.tabGroups.update(s.groupId, { title: `Agent: ${s.title.slice(0, 24)}`, color: 'green', collapsed: false });
     } else {
       await chrome.tabs.group({ tabIds: [tabId], groupId: s.groupId });
     }

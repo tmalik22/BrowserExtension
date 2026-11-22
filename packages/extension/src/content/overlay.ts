@@ -16,18 +16,18 @@ let suspended = false;
 const CSS = `
 :host { all: initial; }
 .frame { position: fixed; inset: 0; pointer-events: none; z-index: 2147483646;
-  box-shadow: inset 0 0 0 3px rgba(217,119,87,.85), inset 0 0 24px 4px rgba(217,119,87,.35);
+  box-shadow: inset 0 0 0 3px rgba(132,204,22,.9), inset 0 0 24px 4px rgba(183,243,74,.4);
   animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: .65 } 50% { opacity: 1 } }
 .pill { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2147483647;
   display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: 999px;
-  background: #1f1d1a; color: #f5f2ec; font: 500 13px/1.2 system-ui, -apple-system, Segoe UI, sans-serif;
+  background: #111827; color: #f3f4f6; font: 500 13px/1.2 system-ui, -apple-system, Segoe UI, sans-serif;
   box-shadow: 0 6px 20px rgba(0,0,0,.25); pointer-events: auto; user-select: none; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #d97757; animation: pulse 1.2s infinite; }
-.pill button { all: unset; cursor: pointer; padding: 4px 10px; border-radius: 999px; background: #d97757; color: #fff; font-weight: 600; }
-.pill button:hover { background: #c4623f; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #b7f34a; animation: pulse 1.2s infinite; }
+.pill button { all: unset; cursor: pointer; padding: 4px 10px; border-radius: 999px; background: #b7f34a; color: #111827; font-weight: 600; }
+.pill button:hover { background: #a3e635; }
 .cursor { position: fixed; z-index: 2147483647; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
-  border: 2px solid #d97757; background: rgba(217,119,87,.25); pointer-events: none; opacity: 0;
+  border: 2px solid #84cc16; background: rgba(183,243,74,.3); pointer-events: none; opacity: 0;
   transition: left .18s ease-out, top .18s ease-out, opacity .2s; }
 .cursor.show { opacity: 1; }
 .cursor.click { animation: click .35s ease-out; }

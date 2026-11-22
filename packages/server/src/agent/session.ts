@@ -4,6 +4,7 @@
  * appended -> model ... until the model replies in text, the user stops it, or a limit is hit.
  */
 import {
+  redactSecrets,
   HALT_TEXT,
   TAB_MEMBERS,
   isBrowserMember,
@@ -30,7 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { buildCaptchaPrompt, buildSystemPrompt, taskPreamble } from './system-prompt.ts';
 import { ACTION_PROMPT, CAPTCHA_SYSTEM, gridPrompt, TEXT_PROMPT } from './captcha-prompts.ts';
-import { checkUploadPaths, evaluate, needsDescription, type PolicyState } from './policy.ts';
+import { PAGE_READ_MEMBERS, checkUploadPaths, evaluate, needsDescription, type PolicyState } from './policy.ts';
 import {
   ProviderError,
   type AssistantPart,
@@ -676,7 +677,9 @@ export class Session {
 
     const member = c.name;
     let desc: ActionDescription | undefined;
-    if (needsDescription(member) && member !== 'navigate') {
+    // In "ask" mode, reads also need to know which site the tab is on now.
+    const describeRead = settings.permissionMode === 'ask' && PAGE_READ_MEMBERS.includes(member);
+    if ((needsDescription(member) && member !== 'navigate') || describeRead) {
       try {
         desc = await this.browser<ActionDescription>('describe', { sessionId: this.id, member, input: c.input }, 20_000);
       } catch (e) {
@@ -706,7 +709,8 @@ export class Session {
       } finally {
         if (!signal.aborted) this.setStatus('running');
       }
-      if (decision === 'deny') {
+      // Anything but an explicit allow is a refusal (fail closed on unexpected values).
+      if (decision !== 'allow_once' && decision !== 'allow_site') {
         return this.errorResult(
           `Error: The user declined this action (${verdict.summary}). Do not retry it or work around it; ask the user how to proceed.`,
         );
@@ -818,7 +822,7 @@ export class Session {
 }
 
 function errText(e: unknown): string {
-  const m = e instanceof Error ? e.message : String(e);
+  const m = redactSecrets(e instanceof Error ? e.message : String(e));
   return m.startsWith('Error') ? m : `Error: ${m}`;
 }
 

@@ -61,7 +61,13 @@ export async function startEnv(settings: Partial<PolicySettings> = {}, opts: Env
     // extension's screenshots don't see. Use a real window size instead.
     viewport: null,
     acceptDownloads: true,
-    args: [`--disable-extensions-except=${EXT_DIR}`, `--load-extension=${EXT_DIR}`, '--window-size=1280,800'],
+    args: [
+      `--disable-extensions-except=${EXT_DIR}`,
+      `--load-extension=${EXT_DIR}`,
+      '--window-size=1280,800',
+      // Test-only: serve CAPTCHA fixture widgets under a real challenge-provider hostname.
+      '--host-resolver-rules=MAP newassets.hcaptcha.com 127.0.0.1',
+    ],
   });
   // Playwright auto-dismisses JS dialogs on pages it controls unless a listener exists. In a real
   // browser nothing does that, so leave dialogs open for the extension to handle.

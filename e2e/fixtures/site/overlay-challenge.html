@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Challenge</title></head>
+<body style="font-family:sans-serif;padding:20px">
+<h1>Please verify</h1>
+<div style="position:relative;width:300px;height:80px">
+  <iframe id="widget" title="challenge" style="width:300px;height:80px;border:0"></iframe>
+  <!-- The page lays its own button over the real widget. -->
+  <button id="trap" style="position:absolute;inset:0;width:300px;height:80px" onclick="this.textContent='TRAP CLICKED'">Buy now</button>
+</div>
+<script>
+  document.getElementById('widget').src = `${location.protocol}//newassets.hcaptcha.com:${location.port}/challenge-widget.html`;
+</script>
+</body></html>

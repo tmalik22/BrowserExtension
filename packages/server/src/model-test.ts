@@ -2,7 +2,7 @@
  * Try a model profile with one small, real request (browser tools attached) and explain the
  * outcome in plain words. Used by the side panel's "Test" button and by check-models.
  */
-import { selectMembers, type ProfileTestResult } from '@ba/shared';
+import { redactSecrets, selectMembers, type ProfileTestResult } from '@ba/shared';
 import { profileAvailability, resolveApiKey } from './config.ts';
 import { buildSystemPrompt } from './agent/system-prompt.ts';
 import { createProvider } from './providers/index.ts';
@@ -34,7 +34,7 @@ export async function testProfile(p: ModelProfile, timeoutMs = 90_000): Promise<
         };
   } catch (e) {
     const seconds = Math.round((Date.now() - t0) / 1000);
-    const msg = ac.signal.aborted ? 'No answer within the time limit.' : (e as Error).message.split('\n')[0];
+    const msg = ac.signal.aborted ? 'No answer within the time limit.' : redactSecrets((e as Error).message.split('\n')[0]);
     const status = (e as { status?: number }).status;
     if (ac.signal.aborted || (!status && /closed the connection without answering|terminated|socket hang up|other side closed|ECONNRESET|timed? ?out/i.test(msg))) {
       return {

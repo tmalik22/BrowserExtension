@@ -16,3 +16,5 @@ e2e/.profile*/
 .DS_Store
 Thumbs.db
 docs/screenshots/raw/
+release/
+dist-store/

@@ -2,7 +2,7 @@
   "name": "browser-agent",
   "private": true,
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -10,6 +10,9 @@
   "scripts": {
     "build": "npm run build -w @ba/extension && npm run typecheck",
     "build:ext": "npm run build -w @ba/extension",
+    "build:store": "tsx packages/extension/build.ts --store",
+    "build:server": "tsx scripts/build-server.ts",
+    "release": "npm run build && npm run build:store && npm run build:server && python scripts/package-release.py",
     "typecheck": "tsc -p packages/shared && tsc -p packages/server --noEmit && tsc -p packages/extension --noEmit && tsc -p tsconfig.json --noEmit",
     "server": "tsx packages/server/src/index.ts",
     "dev": "tsx watch packages/server/src/index.ts",

@@ -21,7 +21,7 @@ bg = Image.new("RGB", (W, H))
 d = ImageDraw.Draw(bg)
 for y in range(H):
     t = y / H
-    d.line([0, y, W, y], fill=(int(32 + 50 * t), int(26 + 22 * t), int(62 - 8 * t)))
+    d.line([0, y, W, y], fill=(int(11 + 20 * t), int(15 + 26 * t), int(23 + 32 * t)))
 
 # App window (hero without its own background), tilted into the right side.
 hero = Image.open(SHOTS / "hero.png").convert("RGB")
@@ -37,9 +37,11 @@ ImageDraw.Draw(mask).rounded_rectangle([0, 0, win.width - 1, win.height - 1], ra
 bg.paste(win, (x, y), mask)
 
 d = ImageDraw.Draw(bg)
+logo = Image.open(SHOTS.parent / "brand" / "logo-512.png").convert("RGBA").resize((76, 76), Image.LANCZOS)
+bg.paste(logo, (56, 66), logo)
 d.text((56, 150), "Browser Agent", font=font(64, True), fill="#ffffff")
-d.text((58, 238), "AI that drives your Chrome,", font=font(30), fill="#f1e6dc")
-d.text((58, 278), "with any model you want.", font=font(30), fill="#f1e6dc")
+d.text((58, 238), "AI that drives your Chrome,", font=font(30), fill="#e5e7eb")
+d.text((58, 278), "with any model you want.", font=font(30), fill="#b7f34a")
 chips = ["Local & self-hosted", "Abliterated OK", "Approval switches", "CAPTCHA helper"]
 cx, cy = 58, 350
 for c in chips:
@@ -47,10 +49,10 @@ for c in chips:
     l, t, r, b = d.textbbox((0, 0), c, font=f)
     if cx + (r - l) + 28 > 520:
         cx, cy = 58, cy + 52
-    d.rounded_rectangle([cx, cy, cx + (r - l) + 28, cy + 40], radius=20, fill="#c0623b")
-    d.text((cx + 14 - l, cy + 20 - (b + t) // 2), c, font=f, fill="#ffffff")
+    d.rounded_rectangle([cx, cy, cx + (r - l) + 28, cy + 40], radius=20, fill="#1f2937", outline="#b7f34a", width=2)
+    d.text((cx + 14 - l, cy + 20 - (b + t) // 2), c, font=f, fill="#b7f34a")
     cx += (r - l) + 40
-d.text((58, 540), "Open source · MIT · github.com/tmalik22/BrowserExtension", font=font(18), fill="#cbbfb5")
+d.text((58, 540), "Open source · MIT · github.com/tmalik22/BrowserExtension", font=font(18), fill="#9ca3af")
 out = SHOTS / "social-preview.png"
 bg.save(out, optimize=True)
 print(out, bg.size, out.stat().st_size // 1024, "KB")

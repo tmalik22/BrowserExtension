@@ -408,7 +408,7 @@ test('screenshots never contain the agent click indicator', async () => {
     for (const [dx, dy] of [[0, 0], [-11, 0], [11, 0], [0, -11], [0, 11]]) out.push(Array.from(ctx.getImageData(575 + dx, 300 + dy, 1, 1).data).slice(0, 3));
     return out;
   }, shot.data);
-  // The indicator ring is orange (217,119,87); the page there is grey/white.
+  // The indicator ring is lime (green-dominant); the page there is grey/white, so only neutral pixels may appear.
   for (const [rr, g, b] of px) expect(rr - b < 40 && Math.abs(rr - g) < 40).toBe(true);
 });
 

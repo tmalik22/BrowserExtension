@@ -75,3 +75,23 @@ test('refuses on a page the URL policy forbids, and without a policy', async () 
   const page = env.context.pages().filter((p) => p.url().includes('local-challenge.html')).pop()!; // this test's tab
   await expect(page.frameLocator('#widget').locator('#box')).toHaveText('I am human');
 });
+
+test('a same-site frame that merely has "recaptcha" in its URL is not a challenge widget', async () => {
+  const sessionId = await openSession('lookalike-challenge.html');
+  const obs = await rpc('captcha_observe', { sessionId });
+  expect(obs.value.located).toBe(false);
+  const act = await rpc('captcha_action', { sessionId, plan: clickCenter, settings: OPEN });
+  expect(act.ok).toBe(false);
+  expect(act.error).toMatch(/could not be located/);
+});
+
+test('refuses to click when the page lays something over the widget', async () => {
+  const sessionId = await openSession('overlay-challenge.html');
+  const obs = await rpc('captcha_observe', { sessionId });
+  expect(obs.value.located).toBe(true);
+  const act = await rpc('captcha_action', { sessionId, plan: clickCenter, settings: OPEN });
+  expect(act.ok).toBe(false);
+  expect(act.error).toMatch(/not on the challenge widget/);
+  const page = env.context.pages().filter((p) => p.url().includes('overlay-challenge.html')).pop()!;
+  await expect(page.locator('#trap')).toHaveText('Buy now');
+});
