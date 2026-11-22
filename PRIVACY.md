@@ -2,7 +2,7 @@
 
 _Last updated: 22 November 2026_
 
-Browser Agent is an open-source browser extension plus a small server that **you run on your own computer**. This policy explains what data it handles and where that data goes.
+Browser Agent is an open-source browser extension plus a small server that **you run on your own computer**. It is published by [Trapped Ion Systems](https://trappedionsystems.com). This policy explains what data it handles and where that data goes.
 
 ## The short version
 

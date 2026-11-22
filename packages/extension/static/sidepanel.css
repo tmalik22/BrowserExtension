@@ -263,3 +263,13 @@ button.chat.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var
 
 .key-catalog.ok { color: var(--ok); }
 .key-catalog.bad { color: var(--bad); }
+
+/* Settings → About: maker branding (Trapped Ion Systems). */
+.about { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25)); display: grid; gap: 6px; }
+.about-maker { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+.about-maker:hover strong { text-decoration: underline; }
+.tis-mark { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 18px; font-weight: 500; letter-spacing: -0.04em; }
+.tis-mark .dot { color: #0e9ab8; }
+@media (prefers-color-scheme: dark) { .tis-mark .dot { color: #7dd3e8; } }
+.about-links { display: flex; gap: 12px; flex-wrap: wrap; }
+.about-links a { color: inherit; opacity: 0.8; }

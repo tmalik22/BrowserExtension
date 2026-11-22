@@ -67,6 +67,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const messages = $('messages');
 const input = $<HTMLTextAreaElement>('input');
 const modelSel = $<HTMLSelectElement>('model');
+$('about-version').textContent = `v${chrome.runtime.getManifest().version}`;
 const picker = initModelPicker({
   select: modelSel,
   profiles: () => chatProfiles(),

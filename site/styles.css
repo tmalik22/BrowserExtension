@@ -95,3 +95,27 @@ footer a.inline { margin: 0; }
 .prose .more { margin-top: 28px; }
 a.card { color: inherit; display: block; }
 a.card:hover { text-decoration: none; border-color: var(--lime-dim); }
+
+/* Trapped Ion Systems (maker) branding: its own mono wordmark and ion cyan, no external fonts. */
+:root { --ion: #7dd3e8; --tis-bg: #070809; --tis-line: #1c2228; }
+.tis-mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.tis-mark { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: -0.04em; color: var(--text); font-weight: 500; }
+.tis-mark .dot { color: var(--ion); }
+.tis-label { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.by-tis { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.by-tis .tis-mark { font-size: 13px; }
+.by-tis:hover { border-color: var(--ion); text-decoration: none; }
+.brand-row { display: flex; align-items: center; }
+.maker { margin-top: 90px; background: var(--tis-bg); border: 1px solid var(--tis-line); border-radius: var(--radius); padding: 40px; display: grid; grid-template-columns: auto 1fr; gap: 36px; align-items: center; }
+.maker .tis-mark { font-size: 64px; line-height: 1; }
+.maker h2 { margin: 8px 0 10px; font-size: 26px; }
+.maker p { color: var(--muted); margin: 0 0 20px; max-width: 620px; }
+.maker .btn.ion { border-color: var(--ion); color: var(--ion); background: transparent; }
+.maker .btn.ion:hover { background: rgba(125, 211, 232, 0.08); }
+.maker .cta { margin-top: 0; justify-content: flex-start; }
+footer .tis-mark { font-size: 15px; margin-right: 8px; }
+@media (max-width: 720px) {
+  .maker { grid-template-columns: 1fr; padding: 28px; gap: 18px; }
+  .maker .tis-mark { font-size: 44px; }
+  .by-tis { display: none; }
+}

@@ -9,6 +9,7 @@ Everything to paste into the [Chrome Web Store Developer Dashboard](https://chro
 1. Sign in to the Developer Dashboard with the Google account you want to publish under.
 2. Pay the **one-time $5 registration fee** and accept the developer agreement.
 3. Verify your contact email (Account → contact email).
+4. Set **Account → Publisher display name** to **Trapped Ion Systems**, and the publisher website to `https://trappedionsystems.com`. The store shows this under the extension name.
 
 ## 2. Upload
 
@@ -50,6 +51,7 @@ Also included
 
 Setup takes about two minutes: download and start the server, open the side panel, click Pair, and check that both windows show the same code.
 
+Made by Trapped Ion Systems: https://trappedionsystems.com
 Open source (MIT): https://github.com/tmalik22/BrowserExtension
 ```
 
@@ -62,12 +64,17 @@ Open source (MIT): https://github.com/tmalik22/BrowserExtension
 | Small promo tile (440×280) | `promo-small.png` |
 | Marquee promo tile (1400×560, optional) | `promo-marquee.png` |
 
-The store won't accept GitHub links for these, so they point at the project website in `site/`, deployed with Cloudflare Pages (replace `YOUR-SITE` with your domain or `*.pages.dev` address):
+The store won't accept GitHub links for these, so they point at the project website in `site/`, deployed with Cloudflare Pages on a free subdomain of trappedionsystems.com:
 
-**Official URL / homepage:** `https://YOUR-SITE/`
-**Support URL:** `https://YOUR-SITE/support`
+**Official URL / homepage:** `https://browseragent.trappedionsystems.com/`
+**Support URL:** `https://browseragent.trappedionsystems.com/support`
 
-The **Official URL** must be a site you've verified in [Google Search Console](https://search.google.com/search-console). Add your domain there: DNS verification is easiest with Cloudflare.
+To set the subdomain up (trappedionsystems.com's DNS is already on Cloudflare, so this costs nothing):
+
+1. Cloudflare dashboard → **Workers & Pages** → the Browser Agent Pages project → **Custom domains** → **Set up a custom domain**.
+2. Enter `browseragent.trappedionsystems.com` and confirm. Cloudflare adds the DNS record and the certificate itself.
+
+The **Official URL** must be verified in [Google Search Console](https://search.google.com/search-console). Add a **Domain** property for `trappedionsystems.com` and verify it with the DNS TXT record (Cloudflare can add it in one click). That covers every subdomain, including this one.
 
 ## 4. Privacy practices tab
 
@@ -101,7 +108,7 @@ Browser Agent lets the user delegate browsing tasks to an AI model of their choi
 
 (The data goes only to the user's own local server, and from there to the model provider *the user* configures.)
 
-**Privacy policy URL:** `https://YOUR-SITE/privacy`
+**Privacy policy URL:** `https://browseragent.trappedionsystems.com/privacy`
 
 ## 5. Distribution
 

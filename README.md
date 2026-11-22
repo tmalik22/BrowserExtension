@@ -9,13 +9,14 @@
 An open-source Chrome agent that clicks, types, shops, fills forms and gets past CAPTCHAs.<br>
 Use **any model**: cloud APIs, your own GPU, self-hosted servers, fine-tunes, even uncensored and abliterated models.
 
+[![by Trapped Ion Systems](https://img.shields.io/badge/by-Trapped%20Ion%20Systems-7dd3e8?labelColor=070809)](https://trappedionsystems.com)
 [![CI](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml/badge.svg)](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/tmalik22/BrowserExtension?color=84cc16)](https://github.com/tmalik22/BrowserExtension/releases/latest)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Chrome MV3](https://img.shields.io/badge/Chrome-MV3%20extension-4285F4?logo=googlechrome&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-238%20unit%20%2B%2075%20e2e-brightgreen)
+![Tests](https://img.shields.io/badge/tests-240%20unit%20%2B%2079%20e2e-brightgreen)
 ![Local models](https://img.shields.io/badge/runs%20on-Ollama%20·%20LM%20Studio%20·%20vLLM%20·%20llama.cpp-8A2BE2)
 
 **[Quick start](#-quick-start)** · **[See it in action](#-see-it-in-action)** · **[CAPTCHA helper](#-captcha-helper)** · **[Any model](#-works-with-any-model)** · **[Security](#-security-model)**
@@ -561,7 +562,10 @@ npm run build && npm test && npm run test:e2e
 <div align="center">
 <br>
 
-Built by **[tmalik22](https://github.com/tmalik22)**. If it's useful to you, a ⭐ helps others find it.
+<a href="https://trappedionsystems.com"><img src="docs/brand/tis-maker.svg" alt="Built by Trapped Ion Systems" width="390"></a>
+
+Browser Agent is an open-source project from **[Trapped Ion Systems](https://trappedionsystems.com)**, built by **[tmalik22](https://github.com/tmalik22)**.<br>
+If it's useful to you, a ⭐ helps others find it.
 
 <sub>Not affiliated with any model provider. Product names are trademarks of their respective owners.</sub>
 
