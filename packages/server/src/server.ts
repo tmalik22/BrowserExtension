@@ -25,9 +25,11 @@ import { createProvider } from './providers/index.ts';
 import type { ModelProfile, Provider } from './providers/types.ts';
 import { TranscriptWriter } from './transcript.ts';
 import { ChatHistory } from './history.ts';
+import { ModelCatalog, mergeCatalog, type CatalogProvider } from './catalog.ts';
+import { detectLocalModels, mergeDetected, type LocalServer } from './local-models.ts';
 import { PairedClients, clientProof, newNonce, safeEqualHex, serverProof, startPairingExchange, whoamiProof, type PairPrompter } from './pairing.ts';
 
-export const SERVER_VERSION = '0.2.0';
+export const SERVER_VERSION = '0.3.0';
 const RECONNECT_GRACE_MS = 20_000;
 const EVENT_BUFFER = 2000;
 
@@ -38,6 +40,8 @@ class ClientHandle implements BrowserLink {
   lastSeen = Date.now();
   extensionVersion = '';
   userAgent = '';
+  /** Which version of the model list this client has (it's only re-sent when it changes). */
+  profilesRev = -1;
   private pending = new Map<string, Pending>();
   private waiters: (() => void)[] = [];
 
@@ -155,6 +159,15 @@ export class AgentServer implements SessionHost {
   private onShutdownRequest?: () => void;
   private pairPrompt?: PairPrompter;
   readonly paired: PairedClients;
+  /** Model list sources: models.json, local detection, provider catalogs. */
+  private configProfiles: ModelProfile[];
+  private configDefault: string;
+  private detectOpt?: boolean | LocalServer[];
+  private detected?: Awaited<ReturnType<typeof detectLocalModels>>;
+  readonly catalog?: ModelCatalog;
+  private profilesRev = 0;
+  private profilesSig = '';
+  private modelTimer?: NodeJS.Timeout;
   /** One pairing question at a time in the server window, and not too many per minute. */
   private pairingBusy = false;
   private pairingAttempts: number[] = [];
@@ -168,6 +181,10 @@ export class AgentServer implements SessionHost {
       onShutdownRequest?: () => void;
       /** Approves "pair with code" requests (the server window). Without one, pairing needs the token. */
       pairPrompt?: PairPrompter;
+      /** Find models in local Ollama / LM Studio (true = default ports). */
+      detectLocal?: boolean | LocalServer[];
+      /** Fetch live model lists from providers the user has keys for (true = all known providers). */
+      catalog?: boolean | CatalogProvider[];
     } = {},
   ) {
     this.onShutdownRequest = opts.onShutdownRequest;
@@ -190,10 +207,22 @@ export class AgentServer implements SessionHost {
       };
     }
     this.settingsStore = new SettingsStore(config.dataDir, opts.settings);
-    this.keyStore = new KeyStore(config.dataDir, () => this.config.profiles);
+    this.configProfiles = [...config.profiles];
+    this.configDefault = config.defaultProfileId;
+    this.detectOpt = opts.detectLocal;
+    if (opts.catalog) {
+      this.catalog = new ModelCatalog(config.dataDir, (env) => process.env[env]?.trim() || undefined, Array.isArray(opts.catalog) ? opts.catalog : undefined);
+    }
+    this.keyStore = new KeyStore(
+      config.dataDir,
+      () => this.config.profiles,
+      () => this.catalog?.keyNames() ?? [],
+      () => this.catalog?.status() ?? [],
+    );
     this.transcripts = new TranscriptWriter(config.dataDir, opts.transcripts ?? true);
     this.chats = new ChatHistory(config.dataDir);
     this.profiles = new Map(config.profiles.map((p) => [p.id, p]));
+    this.rebuildProfiles(false); // cached catalogs show up straight away
     this.httpServer = http.createServer((req, res) => this.handleHttp(req, res));
     this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 * 1024 });
     this.httpServer.on('upgrade', (req, socket, head) => {
@@ -242,6 +271,8 @@ export class AgentServer implements SessionHost {
       this.httpServer.once('error', reject);
       this.httpServer.listen(port, host, () => {
         this.heartbeat = setInterval(() => this.ping(), 20_000);
+        // Provider model lists go stale: check every 6 hours (each list is re-fetched daily).
+        if (this.catalog) this.modelTimer = setInterval(() => void this.refreshModels().catch(() => {}), 6 * 60 * 60 * 1000).unref();
         this.gpu?.start();
         // Warm a configured local CAPTCHA helper alongside the agent server.
         void this.prepareCaptchaHelper();
@@ -253,6 +284,7 @@ export class AgentServer implements SessionHost {
 
   async close(): Promise<void> {
     clearInterval(this.heartbeat);
+    clearInterval(this.modelTimer);
     this.gpu?.stop();
     for (const e of this.sessions.values()) e.session.stop();
     for (const ws of this.wss.clients) ws.terminate();
@@ -486,7 +518,64 @@ export class AgentServer implements SessionHost {
 
   private stateFor(clientId?: string): ServerFrame {
     const sessions = [...this.sessions.values()].filter((e) => !clientId || e.clientId === clientId).map((e) => e.session.summary());
-    return { type: 'state', sessions, settings: this.settings(), profiles: this.config.profiles.map(profileInfo), apiKeys: this.keyStore.info() };
+    // The model list can be hundreds long: only send it when it changed for this client.
+    const c = clientId ? this.clients.get(clientId) : undefined;
+    const withProfiles = !c || c.profilesRev !== this.profilesRev;
+    if (c) c.profilesRev = this.profilesRev;
+    return {
+      type: 'state',
+      sessions,
+      settings: this.settings(),
+      ...(withProfiles ? { profiles: this.config.profiles.map(profileInfo), defaultProfileId: this.config.defaultProfileId } : {}),
+      apiKeys: this.keyStore.info(),
+    };
+  }
+
+  // Models -------------------------------------------------------------------------------------
+
+  /** Recompute the model list from models.json, detected local models and provider catalogs. */
+  private rebuildProfiles(broadcast = true): void {
+    const usable = (p: ModelProfile) => profileAvailability(p).available;
+    const base = this.detected
+      ? mergeDetected(this.configProfiles, this.configDefault, this.detected, usable)
+      : { profiles: this.configProfiles, defaultProfileId: this.configDefault };
+    const fromCatalog = this.catalog?.profiles() ?? [];
+    const all = mergeCatalog(base.profiles, fromCatalog);
+    let def = base.defaultProfileId;
+    const cur = all.find((p) => p.id === def);
+    if (!cur || cur.provider === 'mock' || !usable(cur)) {
+      const pick = pickDefault(fromCatalog.filter(usable));
+      if (pick) def = pick.id;
+    }
+    this.config.profiles = all;
+    this.config.defaultProfileId = def;
+    this.profiles = new Map(all.map((p) => [p.id, p]));
+    // Compare with what clients last received (availability depends on keys, not only the list).
+    const sig = JSON.stringify([def, all.map((p) => [p.id, p.model, p.vision, usable(p)])]);
+    if (sig !== this.profilesSig) {
+      this.profilesSig = sig;
+      this.profilesRev++;
+    }
+    if (broadcast) this.broadcastState();
+  }
+
+  /** Re-scan local model servers and (unless catalog: false) refresh stale provider lists. */
+  async refreshModels(opts: { catalog?: boolean; force?: boolean } = {}): Promise<void> {
+    if (this.detectOpt) this.detected = await detectLocalModels(this.configProfiles, Array.isArray(this.detectOpt) ? this.detectOpt : undefined);
+    if (this.catalog && opts.catalog !== false) await this.catalog.refresh({ force: opts.force });
+    this.rebuildProfiles();
+  }
+
+  /** A key was saved or removed: refresh that provider's list now. */
+  private async refreshCatalogFor(keyEnv: string): Promise<void> {
+    const p = this.catalog?.providerForKey(keyEnv);
+    if (!p || !this.catalog) return;
+    await this.catalog.refresh({ force: true, only: [p.id] });
+    this.rebuildProfiles();
+  }
+
+  catalogStatus() {
+    return this.catalog?.status() ?? [];
   }
 
   private broadcastState(): void {
@@ -651,6 +740,7 @@ export class AgentServer implements SessionHost {
       client.attach(ws);
       client.extensionVersion = frame.extensionVersion;
       client.userAgent = frame.userAgent;
+      client.profilesRev = this.profilesRev;
       client.send({
         type: 'hello_ok',
         serverVersion: SERVER_VERSION,
@@ -733,21 +823,40 @@ export class AgentServer implements SessionHost {
         try {
           this.keyStore.set(String(frame.name), String(frame.key ?? ''));
           this.respond(client, frame.requestId, true, this.keyStore.info());
-          this.broadcastState();
+          this.rebuildProfiles(); // models needing this key become (un)available
+          void this.refreshCatalogFor(String(frame.name));
         } catch (e) {
           this.respond(client, frame.requestId, false, undefined, (e as Error).message);
         }
         return;
       case 'test_api_key': {
         const name = String(frame.name);
-        const profiles = this.config.profiles.filter((p) => p.apiKeyEnv === name);
-        if (!profiles.length) {
+        // Models listed by hand get one small test request each; a live model list is checked by
+        // fetching it (which also proves the key works), not by calling hundreds of models.
+        const profiles = this.config.profiles.filter((p) => p.apiKeyEnv === name && !p.catalog);
+        const cat = this.catalog?.providerForKey(name);
+        if (!profiles.length && !cat) {
           this.respond(client, frame.requestId, false, undefined, `No model uses the key "${name}".`);
           return;
         }
-        void Promise.all(profiles.map((p) => testProfile(p))).then((results) => this.respond(client, frame.requestId, true, { name, results }));
+        const listCheck = async () => {
+          if (!cat || !this.catalog) return [];
+          await this.refreshCatalogFor(name);
+          const st = this.catalog.status().find((s) => s.keyEnv === name);
+          const ok = !!st && !st.error && st.models > 0;
+          return [{ profileId: `${cat.id}/*`, label: `${cat.label} model list`, model: '', ok, message: ok ? `The key works: ${st!.models} models are available in the model menu.` : (st?.error ?? 'No models were returned.') }];
+        };
+        void Promise.all([listCheck(), Promise.all(profiles.map((p) => testProfile(p)))]).then(([list, results]) =>
+          this.respond(client, frame.requestId, true, { name, results: [...list, ...results] }),
+        );
         return;
       }
+      case 'refresh_models':
+        void this.refreshModels({ force: true }).then(
+          () => this.respond(client, frame.requestId, true, this.keyStore.info()),
+          (e) => this.respond(client, frame.requestId, false, undefined, (e as Error).message),
+        );
+        return;
       case 'set_profile_model':
         try {
           const p = setProfileModel(this.config, String(frame.profileId), String(frame.model ?? ''));
@@ -893,6 +1002,16 @@ export class AgentServer implements SessionHost {
       unsub();
     });
   }
+}
+
+/** A sensible default among live-list models when the configured default can't be used. */
+function pickDefault(models: ModelProfile[]): ModelProfile | undefined {
+  const prefer = [/claude-.*sonnet/i, /claude-.*opus/i, /^gpt-5(?!.*(nano|mini))/i, /^gpt-4\.1(?!.*(nano|mini))/i, /gemini-.*pro/i, /qwen.*vl/i, /llama-4/i];
+  for (const re of prefer) {
+    const m = models.find((p) => re.test(p.model) && p.vision);
+    if (m) return m;
+  }
+  return models.find((p) => p.vision) ?? models[0];
 }
 
 function safeEqual(a: string, b: string): boolean {

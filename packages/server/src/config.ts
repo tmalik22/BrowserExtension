@@ -121,6 +121,9 @@ const KEY_LABELS: Record<string, string> = {
   GEMINI_API_KEY: 'Google Gemini',
   OPENROUTER_API_KEY: 'OpenRouter',
   GROQ_API_KEY: 'Groq',
+  XAI_API_KEY: 'xAI',
+  DEEPSEEK_API_KEY: 'DeepSeek',
+  MISTRAL_API_KEY: 'Mistral',
 };
 
 export function keyLabel(name: string): string {
@@ -138,7 +141,14 @@ export class KeyStore {
   /** What process.env had before a saved key replaced it (restored on remove). */
   private original = new Map<string, string | undefined>();
 
-  constructor(dataDir: string, private profiles: () => ModelProfile[]) {
+  constructor(
+    dataDir: string,
+    private profiles: () => ModelProfile[],
+    /** Extra key names to offer (providers with a live model list). */
+    private extraNames: () => string[] = () => [],
+    /** Live model list status per key name. */
+    private catalogStatus: () => { keyEnv: string; models: number; updatedAt?: number; error?: string }[] = () => [],
+  ) {
     this.file = path.join(dataDir, 'keys.json');
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
@@ -154,7 +164,7 @@ export class KeyStore {
 
   /** Key names used by the configured profiles, in profile order. */
   names(): string[] {
-    return [...new Set(this.profiles().map((p) => p.apiKeyEnv).filter((n): n is string => !!n))];
+    return [...new Set([...this.profiles().map((p) => p.apiKeyEnv).filter((n): n is string => !!n), ...this.extraNames()])];
   }
 
   set(name: string, key: string): void {
@@ -191,7 +201,12 @@ export class KeyStore {
         set: !!v,
         source: this.saved[name] ? 'panel' : v ? 'env' : undefined,
         hint: v && v.length >= 12 ? v.slice(-4) : undefined,
-        usedBy: this.profiles().filter((p) => p.apiKeyEnv === name).map((p) => p.label),
+        // Models listed by hand; the live list is summarised separately (it can be hundreds).
+        usedBy: this.profiles().filter((p) => p.apiKeyEnv === name && !p.catalog).map((p) => p.label),
+        ...(() => {
+          const c = this.catalogStatus().find((x) => x.keyEnv === name);
+          return c ? { catalogModels: c.models, catalogUpdatedAt: c.updatedAt, catalogError: c.error } : {};
+        })(),
       };
     });
   }
@@ -206,9 +221,22 @@ function firstAvailable(profiles: ModelProfile[]): ModelProfile | undefined {
   return profiles.find((p) => p.provider !== 'mock' && profileAvailability(p).available);
 }
 
+const LOCAL_URL = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/i;
+
+/** Which picker heading a profile belongs under. */
+export function profileGroup(p: ModelProfile): string {
+  if (p.group) return p.group;
+  if (p.provider === 'mock') return 'Testing';
+  if (p.detected || (p.baseURL && LOCAL_URL.test(p.baseURL))) return 'Local';
+  if (p.provider === 'anthropic') return 'Anthropic';
+  if (p.apiKeyEnv) return keyLabel(p.apiKeyEnv);
+  return 'Custom';
+}
+
 export function profileInfo(p: ModelProfile): ProfileInfo {
   const a = profileAvailability(p);
-  return { id: p.id, label: p.label, provider: p.provider, model: p.model, vision: p.vision, available: a.available, unavailableReason: a.reason };
+  const source = p.provider === 'mock' ? 'test' : p.catalog ? 'catalog' : p.detected ? 'local' : 'config';
+  return { id: p.id, label: p.label, provider: p.provider, model: p.model, vision: p.vision, available: a.available, unavailableReason: a.reason, group: profileGroup(p), source };
 }
 
 export function loadOrCreateToken(dataDir: string): string {

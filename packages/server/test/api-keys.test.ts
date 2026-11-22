@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { PROTOCOL_VERSION, type ApiKeyInfo, type KeyTestResult, type ServerFrame } from '@ba/shared';
+import { type ProfileInfo, PROTOCOL_VERSION, type ApiKeyInfo, type KeyTestResult, type ServerFrame } from '@ba/shared';
 import type { ServerConfig } from '../src/config.ts';
 import { rankSimilar } from '../src/model-test.ts';
 import { toOpenAIMessages } from '../src/providers/openai.ts';
@@ -83,7 +83,13 @@ async function panel() {
       };
       tick();
     });
-  const lastState = () => [...frames].reverse().find((f) => f.type === 'state') as Extract<ServerFrame, { type: 'state' }>;
+  // Like the extension: the model list is only re-sent when it changes, so keep the latest one
+  // (from hello_ok or any state frame that carried it).
+  const lastState = () => {
+    const st = [...frames].reverse().find((f) => f.type === 'state') as Extract<ServerFrame, { type: 'state' }>;
+    const withList = [...frames].reverse().find((f) => (f.type === 'state' && f.profiles) || f.type === 'hello_ok') as { profiles: ProfileInfo[] };
+    return { ...st, profiles: st.profiles ?? withList.profiles };
+  };
   return { ws, frames, raw, call, lastState };
 }
 

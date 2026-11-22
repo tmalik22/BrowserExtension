@@ -20,9 +20,18 @@ const RAW = path.join(OUT, 'raw');
 const LINE = '0, NVIDIA GeForce RTX 4090, 67, N/A, 58, 312.4, 450.00, 94, 19870, 24564, 2520, 0x0000000000000000, P2';
 const GPU_SOURCE = `let i=0;setInterval(()=>{i++;const t=60+Math.round(6*Math.sin(i/9))+(i%4);const p=(300+40*Math.sin(i/7)).toFixed(1);console.log(${JSON.stringify(LINE)}.replace(', 67,', ', '+t+',').replace('312.4',p))},120)`;
 
+// A realistic slice of what live model lists look like in the picker.
+const LISTED = [
+  ['nvidia', 'NVIDIA NIM', ['meta/llama-4-maverick-17b-128e-instruct', 'qwen/qwen3-vl-235b-a22b', 'nvidia/nemotron-3.5-super-vl', 'google/gemma-4-31b-it', 'deepseek-ai/deepseek-v4.1-flash']],
+  ['nanogpt', 'NanoGPT', ['anthropic/claude-sonnet-4.6', 'z-ai/glm-5.3-flash-uncensored', 'deepseek/deepseek-v4.1-flash-uncensored', 'moonshotai/kimi-k3']],
+  ['openrouter', 'OpenRouter', ['openai/gpt-5', 'google/gemini-3-pro', 'x-ai/grok-4']],
+] as const;
+const CATALOG_PROFILES = LISTED.flatMap(([id, group, models]) =>
+  models.map((m) => ({ id: `${id}/${m}`, label: m, provider: 'openai' as const, model: m, baseURL: 'http://127.0.0.1:1/v1', apiKey: 'x', vision: !/deepseek|glm|kimi/.test(m), group, catalog: id })),
+);
+
 const PROFILES = [
-  { id: 'local-qwen', label: 'Qwen3-VL 32B (Ollama, local)', provider: 'openai' as const, model: 'qwen3-vl:32b', baseURL: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', vision: true },
-  { id: 'cloud', label: 'OpenRouter (cloud)', provider: 'openai' as const, model: 'x', baseURL: 'http://127.0.0.1:1/v1', apiKey: 'x', vision: true },
+  { id: 'local-qwen', label: 'Qwen3-VL 32B (Ollama, local)', provider: 'openai' as const, model: 'qwen3-vl:32b', baseURL: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', vision: true, detected: true },
 ];
 
 test.describe.configure({ mode: 'serial' });
@@ -52,7 +61,7 @@ test.beforeAll(async () => {
   fs.mkdirSync(RAW, { recursive: true });
   helperServer = await startHelperModel();
   const helper = { id: 'helper', label: 'Gemma 3 12B (local)', provider: 'openai' as const, model: 'gemma3:12b', baseURL: `${helperServer.url}/v1`, apiKey: 'x', vision: true, stream: true };
-  env = await startEnv({}, { transcripts: true, profiles: [...PROFILES, helper], gpu: { command: process.execPath, args: ['-e', GPU_SOURCE], intervalMs: 120 } });
+  env = await startEnv({}, { transcripts: true, profiles: [...PROFILES, helper, ...CATALOG_PROFILES] as any, gpu: { command: process.execPath, args: ['-e', GPU_SOURCE], intervalMs: 120 } });
 });
 test.afterAll(async () => {
   await env?.close();
@@ -218,4 +227,21 @@ test('pairing card', async () => {
     (env.server as any).pairPrompt = undefined;
     await setConfig({ serverUrl, token: 'e2e-token' });
   }
+});
+
+test('model picker', async () => {
+  test.skip(!process.env.SHOTS, 'README screenshots only');
+  const panel = await openPanel();
+  await panel.locator('#model-btn').click();
+  await panel.locator('.model-search').fill('maverick');
+  await panel.locator('.model-search').press('Enter');
+  await panel.locator('#model-btn').click();
+  await expect(panel.locator('#model-menu')).toBeVisible();
+  await panel.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    document.querySelector('.model-list')!.scrollTop = 0;
+  });
+  await panel.screenshot({ path: path.join(OUT, 'panel-model-picker.png'), clip: { x: 0, y: 236, width: 420, height: 584 } });
+  await panel.locator('.model-search').fill('uncensored');
+  await panel.screenshot({ path: path.join(OUT, 'panel-model-search.png'), clip: { x: 0, y: 520, width: 420, height: 300 } });
 });

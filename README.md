@@ -15,7 +15,7 @@ Use **any model**: cloud APIs, your own GPU, self-hosted servers, fine-tunes, ev
 ![Chrome MV3](https://img.shields.io/badge/Chrome-MV3%20extension-4285F4?logo=googlechrome&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-226%20unit%20%2B%2069%20e2e-brightgreen)
+![Tests](https://img.shields.io/badge/tests-238%20unit%20%2B%2075%20e2e-brightgreen)
 ![Local models](https://img.shields.io/badge/runs%20on-Ollama%20·%20LM%20Studio%20·%20vLLM%20·%20llama.cpp-8A2BE2)
 
 **[Quick start](#-quick-start)** · **[See it in action](#-see-it-in-action)** · **[CAPTCHA helper](#-captcha-helper)** · **[Any model](#-works-with-any-model)** · **[Security](#-security-model)**
@@ -219,6 +219,25 @@ On Windows, `startScript` can point at a PowerShell script that starts the model
 
 If it speaks the OpenAI `/v1/chat/completions` API, it works. The Anthropic API is supported natively too.
 
+### Always-current model lists
+
+<table>
+<tr>
+<td width="55%" valign="top">
+
+You don't maintain model lists. **Add a key and that provider's full, current model list appears**, and it stays up to date:
+
+- **NVIDIA NIM, NanoGPT, OpenRouter, Anthropic, OpenAI, Google Gemini, Groq, xAI, DeepSeek and Mistral** are fetched from each provider's own model list. They refresh daily, when you add a key, and when you click **Refresh model lists**.
+- **Ollama and LM Studio** models are detected on your machine.
+- Vision and tool calling are read from the provider's own model info where it gives them (and guessed from the name otherwise). Embedding, speech, image and moderation models are filtered out.
+- The **model picker** has search, your recent models at the top, models grouped by provider, and *vision* / *local* badges. Hundreds of models stay easy to find.
+- Anything you write in `models.json` takes precedence for the same model, so you can still fine-tune settings per model.
+
+</td>
+<td width="45%" valign="top"><img src="docs/screenshots/panel-model-picker.png" alt="Model picker with search, recent models, and models grouped by Local, OpenRouter and NVIDIA NIM"></td>
+</tr>
+</table>
+
 | Kind | Examples | Notes |
 |---|---|---|
 | **Anthropic** | Opus, Sonnet, Haiku | Native browser toolset with thinking and prompt caching |
@@ -411,7 +430,7 @@ Permission mode, the **"Ask me before…" approval switches**, allowed and block
 
 <br>
 
-See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (default `127.0.0.1:7878`), a fixed `AGENT_TOKEN`, `AGENT_DEFAULT_PROFILE`, `AGENT_EXTENSION_IDS` (restricts which extensions may connect), `AGENT_ALLOWED_HOSTS` (extra hostnames the server answers to, for remote setups), `AGENT_DETECT_LOCAL=0` (don't auto-detect Ollama / LM Studio models), `AGENT_EXTRA_INSTRUCTIONS`, `AGENT_TRANSCRIPTS=0` (don't save transcripts) and `BA_GPU=0` (no GPU monitor).
+See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (default `127.0.0.1:7878`), a fixed `AGENT_TOKEN`, `AGENT_DEFAULT_PROFILE`, `AGENT_EXTENSION_IDS` (restricts which extensions may connect), `AGENT_ALLOWED_HOSTS` (extra hostnames the server answers to, for remote setups), `AGENT_DETECT_LOCAL=0` (don't auto-detect Ollama / LM Studio models), `AGENT_MODEL_LISTS=0` (don't fetch provider model lists; use only `models.json`), `AGENT_EXTRA_INSTRUCTIONS`, `AGENT_TRANSCRIPTS=0` (don't save transcripts) and `BA_GPU=0` (no GPU monitor).
 
 </details>
 
@@ -474,8 +493,8 @@ Design notes and trade-offs: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 ## 🧪 Testing
 
 ```bash
-npm test             # 226 unit + integration tests: policy, providers vs fake APIs, agent loop, server
-npm run test:e2e     # 69 browser tests: real Chromium + extension + server + fixture site
+npm test             # 238 unit + integration tests: policy, providers vs fake APIs, agent loop, server
+npm run test:e2e     # 75 browser tests: real Chromium + extension + server + fixture site
 npm run test:all
 npm run eval -- --profile openrouter            # live evals with a real model (costs tokens)
 npm run eval -- --profile ollama --task long-list --repeat 3

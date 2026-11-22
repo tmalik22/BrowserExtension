@@ -4,6 +4,7 @@
  */
 import { CONFIRM_CATEGORIES, DEFAULT_CONFIRM, SERVER_DOWNLOAD_URL, type AgentEvent, type ApiKeyInfo, type ConfirmSettings, type PolicySettings, type ProfileInfo, type SessionSummary } from '@ba/shared';
 import { initKeys, renderKeys } from './keys.ts';
+import { initModelPicker } from './model-picker.ts';
 import { initGpu, renderGpu } from './gpu.ts';
 import { fillRecent, initHistory, showHistoryList } from './history.ts';
 
@@ -66,6 +67,14 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const messages = $('messages');
 const input = $<HTMLTextAreaElement>('input');
 const modelSel = $<HTMLSelectElement>('model');
+const picker = initModelPicker({
+  select: modelSel,
+  profiles: () => state.profiles,
+  refresh: async () => {
+    await request({ type: 'panel:refresh_models' }, 60_000).catch(() => {});
+  },
+  openSettings: () => showSettings(true),
+});
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -437,7 +446,8 @@ function onMessage(msg: any): void {
     case 'state':
       state.sessions = msg.sessions;
       state.settings = msg.settings;
-      state.profiles = msg.profiles;
+      state.profiles = msg.profiles ?? state.profiles;
+      if (msg.defaultProfileId) state.defaultProfileId = msg.defaultProfileId;
       if (msg.apiKeys) state.apiKeys = msg.apiKeys;
       renderProfiles();
       renderKeys(state.apiKeys);
@@ -583,6 +593,7 @@ function renderProfiles(): void {
   }
   const pick = state.profiles.find((p) => p.id === current && p.available) ?? state.profiles.find((p) => p.id === state.defaultProfileId) ?? state.profiles.find((p) => p.available);
   if (pick) modelSel.value = pick.id;
+  picker.render();
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1,5 +1,4 @@
-import { loadConfig, profileAvailability, profileInfo, type ServerConfig } from './config.ts';
-import { detectLocalModels, mergeDetected } from './local-models.ts';
+import { loadConfig, profileInfo, type ServerConfig } from './config.ts';
 import { consolePairPrompter, newNonce, safeEqualHex, whoamiProof } from './pairing.ts';
 import { AgentServer } from './server.ts';
 
@@ -58,13 +57,6 @@ export async function listenReplacingOld(server: AgentServer, config: ServerConf
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  // Show models already installed in Ollama / LM Studio without any models.json editing.
-  if (process.env.AGENT_DETECT_LOCAL !== '0') {
-    const found = await detectLocalModels(config.profiles);
-    const merged = mergeDetected(config.profiles, config.defaultProfileId, found, (p) => profileAvailability(p).available);
-    config.profiles = merged.profiles;
-    config.defaultProfileId = merged.defaultProfileId;
-  }
   let server: AgentServer;
   const shutdown = async (why = '') => {
     console.log(`\nShutting down${why}…`);
@@ -77,8 +69,12 @@ async function main(): Promise<void> {
     transcripts: process.env.AGENT_TRANSCRIPTS !== '0',
     onShutdownRequest: () => void shutdown(' (a newer agent server is taking over)'),
     pairPrompt: consolePairPrompter(),
+    // Models installed in Ollama / LM Studio, and live model lists from providers you have keys for.
+    detectLocal: process.env.AGENT_DETECT_LOCAL !== '0',
+    catalog: process.env.AGENT_MODEL_LISTS !== '0',
   });
   const port = await listenReplacingOld(server, config);
+  await server.refreshModels({ catalog: false }); // local detection is quick; provider lists load below
   const profiles = config.profiles.map(profileInfo);
   const lines = [
     '',
@@ -90,9 +86,10 @@ async function main(): Promise<void> {
       : '  Paste it into the extension side panel → Settings → Pairing token.',
     '',
     '  Models ready to use:',
-    ...profiles.filter((p) => p.available).map((p) => `    ✓ ${p.label}${p.id === config.defaultProfileId ? '  [default]' : ''}`),
+    ...profiles.filter((p) => p.available && p.source !== 'catalog').map((p) => `    ✓ ${p.label}${p.id === config.defaultProfileId ? '  [default]' : ''}`),
+    ...server.catalogStatus().filter((c) => c.models).map((c) => `    ✓ ${c.models} ${c.label} models (live list)`),
     ...(() => {
-      const missing = profiles.filter((p) => !p.available);
+      const missing = profiles.filter((p) => !p.available && p.source !== 'catalog');
       return missing.length ? [`    + ${missing.length} more need an API key: add it in the side panel → Settings → API keys.`] : [];
     })(),
     ...(config.profiles.some((p) => p.detected) ? [] : ['    Tip: install Ollama or LM Studio and your local models appear here automatically.']),
@@ -104,6 +101,12 @@ async function main(): Promise<void> {
     '',
   ];
   console.log(lines.join('\n'));
+  // Fetch (or refresh) provider model lists in the background; the side panel updates when done.
+  void server.refreshModels().then(() => {
+    for (const c of server.catalogStatus()) {
+      console.log(c.error ? `  ${c.label} model list: ${c.error}` : `  ${c.label}: ${c.models} models available.`);
+    }
+  });
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
 }

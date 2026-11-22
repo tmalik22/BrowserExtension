@@ -106,7 +106,7 @@ function onFrame(f: ServerFrame): void {
       broadcast({ type: 'hello', profiles: f.profiles, defaultProfileId: f.defaultProfileId, settings: f.settings, serverVersion: f.serverVersion });
       break;
     case 'state':
-      broadcast({ type: 'state', sessions: f.sessions, settings: f.settings, profiles: f.profiles, apiKeys: f.apiKeys });
+      broadcast({ type: 'state', sessions: f.sessions, settings: f.settings, profiles: bridge.lastState?.profiles ?? [], defaultProfileId: bridge.lastState?.defaultProfileId, apiKeys: f.apiKeys });
       break;
     case 'gpu':
       lastGpu = f.gpu;
@@ -141,7 +141,7 @@ async function handlePanel(port: chrome.runtime.Port, msg: PanelMsg): Promise<vo
       case 'panel:init':
         port.postMessage(connMessage());
         if (bridge.hello) port.postMessage({ type: 'hello', profiles: bridge.hello.profiles, defaultProfileId: bridge.hello.defaultProfileId, settings: settings(), serverVersion: bridge.hello.serverVersion });
-        if (bridge.lastState) port.postMessage({ type: 'state', sessions: bridge.lastState.sessions, settings: bridge.lastState.settings, profiles: bridge.lastState.profiles, apiKeys: bridge.lastState.apiKeys });
+        if (bridge.lastState) port.postMessage({ type: 'state', sessions: bridge.lastState.sessions, settings: bridge.lastState.settings, profiles: bridge.lastState.profiles, defaultProfileId: bridge.lastState.defaultProfileId, apiKeys: bridge.lastState.apiKeys });
         if (lastGpu) port.postMessage({ type: 'gpu', gpu: lastGpu });
         reply(true);
         break;
@@ -206,6 +206,11 @@ async function handlePanel(port: chrome.runtime.Port, msg: PanelMsg): Promise<vo
       case 'panel:settings': {
         const requestId = newId('r');
         const data = await bridge.request({ type: 'update_settings', requestId, settings: msg.settings });
+        reply(true, data);
+        break;
+      }
+      case 'panel:refresh_models': {
+        const data = await bridge.request({ type: 'refresh_models', requestId: newId('r') }, 60_000);
         reply(true, data);
         break;
       }

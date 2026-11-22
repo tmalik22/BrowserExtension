@@ -7,7 +7,7 @@ import type { ApiKeyInfo, KeyTestResult, ProfileTestResult } from '@ba/shared';
 type Request = <T = any>(msg: Record<string, unknown>, timeoutMs?: number) => Promise<T>;
 
 /** Keys shown up front; the rest go under "More providers" until they are set. */
-const PRIMARY = ['NANOGPT_API_KEY', 'ARK_API_KEY', 'NVIDIA_API_KEY'];
+const PRIMARY = ['OPENROUTER_API_KEY', 'NVIDIA_API_KEY', 'NANOGPT_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY'];
 
 let request: Request;
 let lastSig = '';
@@ -62,6 +62,14 @@ export function renderKeys(keys: ApiKeyInfo[] | undefined, force = false): void 
   }
 }
 
+function timeAgo(t: number): string {
+  const m = Math.round((Date.now() - t) / 60_000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
+}
+
 function row(k: ApiKeyInfo, typed?: string): HTMLElement {
   const wrap = el('div', 'key');
   wrap.dataset.name = k.name;
@@ -71,6 +79,11 @@ function row(k: ApiKeyInfo, typed?: string): HTMLElement {
   head.append(el('span', `key-status ${k.set ? 'ok' : 'missing'}`, status));
   wrap.append(head);
   if (k.usedBy.length) wrap.append(el('div', 'muted small', `Used by: ${k.usedBy.join(', ')}`));
+  if (k.catalogError) wrap.append(el('div', 'small key-catalog bad', `Model list: ${k.catalogError}`));
+  else if (k.catalogModels !== undefined) {
+    const ago = k.catalogUpdatedAt ? timeAgo(k.catalogUpdatedAt) : '';
+    wrap.append(el('div', 'small key-catalog ok', `Live model list: ${k.catalogModels} models${ago ? ` · updated ${ago}` : ''}`));
+  } else if (!k.set && !k.usedBy.length) wrap.append(el('div', 'muted small', 'Add a key to get this provider’s full, always-current model list.'));
 
   const line = el('div', 'row key-row');
   const input = el('input');
@@ -150,8 +163,8 @@ async function saveKey(name: string, input: HTMLInputElement): Promise<void> {
 
 async function testKey(name: string): Promise<void> {
   busy.add(name);
-  const n = current.find((k) => k.name === name)?.usedBy.length ?? 1;
-  setOutcome(name, `Testing ${n} model${n === 1 ? '' : 's'} with one small request each…`);
+  const n = current.find((k) => k.name === name)?.usedBy.length ?? 0;
+  setOutcome(name, n ? `Testing ${n} model${n === 1 ? '' : 's'} with one small request each, and fetching the model list…` : 'Checking the key and fetching the model list…');
   try {
     const res = await request<KeyTestResult>({ type: 'panel:testkey', name }, 130_000);
     busy.delete(name);

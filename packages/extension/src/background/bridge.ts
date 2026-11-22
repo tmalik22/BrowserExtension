@@ -394,7 +394,12 @@ export class Bridge {
         break;
       }
       case 'state':
-        this.lastState = f;
+        // The model list is only re-sent when it changes: keep the last one.
+        this.lastState = {
+          ...f,
+          profiles: f.profiles ?? this.lastState?.profiles ?? this.hello?.profiles ?? [],
+          defaultProfileId: f.defaultProfileId ?? this.lastState?.defaultProfileId ?? this.hello?.defaultProfileId,
+        };
         break;
     }
     this.onFrame(f);

@@ -176,6 +176,10 @@ export interface ProfileInfo {
   vision: boolean;
   available: boolean;
   unavailableReason?: string;
+  /** Model picker heading: provider name, "Local", "Custom"… */
+  group?: string;
+  /** Where it came from: models.json, local auto-detection, or a provider's live model list. */
+  source?: 'config' | 'local' | 'catalog' | 'test';
 }
 
 /** A provider key the panel can set. The key itself never leaves the server. */
@@ -190,6 +194,10 @@ export interface ApiKeyInfo {
   hint?: string;
   /** Labels of the model profiles that use this key. */
   usedBy: string[];
+  /** Live model list for this provider: how many models, when it was fetched, any error. */
+  catalogModels?: number;
+  catalogUpdatedAt?: number;
+  catalogError?: string;
 }
 
 export interface ProfileTestResult {
@@ -327,6 +335,8 @@ export type ClientFrame =
   | { type: 'list_chats'; requestId: string; limit?: number }
   /** Save (or with an empty key, remove) a provider API key on the server. Never echoed back. */
   | { type: 'set_api_key'; requestId: string; name: string; key: string }
+  /** Re-scan local model servers and re-fetch provider model lists. */
+  | { type: 'refresh_models'; requestId: string }
   /** Try every model that uses this key with one small request; responds with KeyTestResult. */
   | { type: 'test_api_key'; requestId: string; name: string }
   /** Change which model id a profile asks for (e.g. after a test suggested the right one). */
@@ -351,7 +361,15 @@ export type ServerFrame =
   | { type: 'rpc'; id: string; method: RpcMethod; params: Record<string, unknown> }
   | { type: 'agent_event'; sessionId: string; seq: number; event: AgentEvent }
   | { type: 'response'; requestId: string; ok: boolean; error?: string; data?: unknown }
-  | { type: 'state'; sessions: SessionSummary[]; settings: PolicySettings; profiles: ProfileInfo[]; apiKeys?: ApiKeyInfo[] }
+  | {
+      type: 'state';
+      sessions: SessionSummary[];
+      settings: PolicySettings;
+      /** Only sent when the model list changed since the last frame (it can be long). */
+      profiles?: ProfileInfo[];
+      defaultProfileId?: string;
+      apiKeys?: ApiKeyInfo[];
+    }
   | { type: 'gpu'; gpu: GpuStatus }
   | { type: 'ping'; t: number };
 

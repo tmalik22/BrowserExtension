@@ -31,7 +31,8 @@ Browser Agent is an open-source AI agent that works in Chrome for you: it reads 
 
 Bring any model
 • Local models on your own computer: Ollama, LM Studio, vLLM, llama.cpp (detected automatically).
-• Or your own API keys for Anthropic, OpenAI, Google Gemini, OpenRouter, Groq and other OpenAI-compatible services.
+• Or your own API keys: NVIDIA NIM, NanoGPT, OpenRouter, Anthropic, OpenAI, Google Gemini, Groq, xAI, DeepSeek, Mistral, or any OpenAI-compatible service.
+• Always-current model lists: add a key and that provider's full model list appears, refreshed automatically. Search hundreds of models in the model picker.
 • Works with small models too: a compact toolset and modes for models without vision or tool calling.
 
 You stay in control

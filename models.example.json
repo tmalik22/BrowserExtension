@@ -1,42 +1,7 @@
 {
-  "$comment": "Copy to models.json and edit. Keys come from .env (apiKeyEnv). provider: anthropic | openai (any OpenAI-compatible endpoint) | mock. Model names for non-Anthropic providers are examples: replace them with models your account/server actually serves.",
+  "$comment": "Copy to models.json and edit (optional: without it these defaults are used). Keys come from Settings → API keys or .env (apiKeyEnv). provider: anthropic | openai (any OpenAI-compatible endpoint) | mock. You rarely need to list cloud models here: for every provider you add a key for (Anthropic, OpenAI, Gemini, OpenRouter, NVIDIA NIM, NanoGPT, Groq, xAI, DeepSeek, Mistral) the full, current model list is fetched automatically, and Ollama / LM Studio models are detected. Profiles here take precedence for the same model, so use them to tune settings (vision, toolSet, effort…).",
   "default": "claude-opus",
   "profiles": [
-    {
-      "id": "nanogpt",
-      "label": "NanoGPT (any model: edit \"model\")",
-      "provider": "openai",
-      "model": "qwen/qwen3.8-27b",
-      "baseURL": "https://nano-gpt.com/api/v1",
-      "apiKeyEnv": "NANOGPT_API_KEY",
-      "vision": false,
-      "timeoutMs": 300000
-    },
-    {
-      "id": "nanogpt-deepseek-v4.1-flash-uncensored",
-      "label": "DeepSeek V4.1 Flash Uncensored (NanoGPT)",
-      "provider": "openai",
-      "model": "deepseek/deepseek-v4.1-flash-uncensored",
-      "baseURL": "https://nano-gpt.com/api/v1",
-      "apiKeyEnv": "NANOGPT_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "replayReasoning": true,
-      "keepImages": 3
-    },
-    {
-      "id": "nanogpt-glm-5.3-flash-uncensored",
-      "label": "GLM 5.3 Flash Uncensored (NanoGPT)",
-      "provider": "openai",
-      "model": "z-ai/glm-5.3-flash-uncensored",
-      "baseURL": "https://nano-gpt.com/api/v1",
-      "apiKeyEnv": "NANOGPT_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "keepImages": 3
-    },
     {
       "id": "ark-deepseek-v4.1-flash",
       "label": "DeepSeek V4.1 Flash (Volcano Ark coding plan)",
@@ -73,67 +38,6 @@
       "vision": false,
       "toolSet": "full",
       "timeoutMs": 300000
-    },
-    {
-      "id": "nim-deepseek-v4.1-flash",
-      "label": "DeepSeek V4.1 Flash (NVIDIA NIM)",
-      "provider": "openai",
-      "model": "deepseek-ai/deepseek-v4.1-flash",
-      "baseURL": "https://integrate.api.nvidia.com/v1",
-      "apiKeyEnv": "NVIDIA_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "replayReasoning": true,
-      "keepImages": 3
-    },
-    {
-      "id": "nim-nemotron-3.5-super-vl",
-      "label": "Nemotron 3.5 Super VL (NVIDIA NIM)",
-      "provider": "openai",
-      "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
-      "baseURL": "https://integrate.api.nvidia.com/v1",
-      "apiKeyEnv": "NVIDIA_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "keepImages": 3
-    },
-    {
-      "id": "nim-minimax-m3.1-flash",
-      "label": "MiniMax M3.1 Flash (NVIDIA NIM)",
-      "provider": "openai",
-      "model": "minimaxai/minimax-m3.1-flash",
-      "baseURL": "https://integrate.api.nvidia.com/v1",
-      "apiKeyEnv": "NVIDIA_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "keepImages": 3
-    },
-    {
-      "id": "nim-mistral-large-4",
-      "label": "Mistral Large 4 (NVIDIA NIM)",
-      "provider": "openai",
-      "model": "mistralai/mistral-large-4-1t-a52b",
-      "baseURL": "https://integrate.api.nvidia.com/v1",
-      "apiKeyEnv": "NVIDIA_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "keepImages": 3
-    },
-    {
-      "id": "nim-step-5-preview",
-      "label": "Step 5 Preview (NVIDIA NIM)",
-      "provider": "openai",
-      "model": "stepfun-ai/step-5-preview",
-      "baseURL": "https://integrate.api.nvidia.com/v1",
-      "apiKeyEnv": "NVIDIA_API_KEY",
-      "vision": true,
-      "toolSet": "full",
-      "timeoutMs": 300000,
-      "keepImages": 3
     },
     {
       "id": "claude-opus",

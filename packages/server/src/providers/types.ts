@@ -80,6 +80,10 @@ export interface ModelProfile {
   captchaProtocol?: 'kraken';
   /** Found by local-model auto-detection (Ollama / LM Studio), not in models.json. */
   detected?: boolean;
+  /** From a provider's live model list (catalog.ts): the catalog provider id. */
+  catalog?: string;
+  /** Heading the model picker groups this model under (e.g. "NVIDIA NIM", "Local"). */
+  group?: string;
   /** Local script that starts this profile's model server (spawned on first CAPTCHA use). */
   startScript?: string;
 }
