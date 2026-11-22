@@ -45,7 +45,7 @@
       <div class="card"><div class="icon">🖥️</div><h3>Fully local</h3><p>Ollama, LM Studio, vLLM or llama.cpp on your own GPU. Installed models show up automatically.</p></div>
       <div class="card"><div class="icon">🔓</div><h3>Unfiltered models OK</h3><p>Uncensored and abliterated models work. Safety comes from the policy engine, not from the model refusing.</p></div>
       <div class="card"><div class="icon">🛑</div><h3>You hold the brakes</h3><p>It asks before purchases, logins, passwords, sending, deleting and more, with 11 separate switches.</p></div>
-      <div class="card"><div class="icon">🧩</div><h3>CAPTCHA helper</h3><p>Optional: a vision model you pick clears Cloudflare, reCAPTCHA or hCaptcha checks so the task continues.</p></div>
+      <div class="card"><div class="icon">🧩</div><h3>CAPTCHA helper</h3><p>Optional: a free local CAPTCHA model (CaptchaKraken, about 7 GB of GPU memory) clears Cloudflare, reCAPTCHA or hCaptcha checks so the task continues.</p></div>
       <div class="card"><div class="icon">🔑</div><h3>Private by design</h3><p>Keys stay on your computer. The extension only talks to your own local server. No telemetry.</p></div>
     </div>
   </section>
@@ -69,8 +69,8 @@
 
   <section id="captcha">
     <h2>Gets past CAPTCHA checks</h2>
-    <p class="sub">When a challenge blocks the page, Browser Agent hands just that part to a helper model you choose, then carries on. It only acts on genuine challenge widgets, and it's off by default.</p>
-    <img src="assets/captcha.png" alt="The agent detects a CAPTCHA, a local helper model solves it, and the task continues" loading="lazy" class="rounded"
+    <p class="sub">When a challenge blocks the page, Browser Agent hands just that part to <a href="https://huggingface.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF">CaptchaKraken v1.2</a>, a free CAPTCHA model running on your own GPU, then carries on. You need Ollama, LM Studio or llama.cpp, about 7 GB of GPU memory and a 16k context. It only acts on genuine challenge widgets, and it's off by default. <a href="https://github.com/tmalik22/BrowserExtension#-captcha-helper">Setup guide</a></p>
+    <img src="assets/captcha.png" alt="The agent detects a CAPTCHA, CaptchaKraken solves it locally, and the task continues" loading="lazy" class="rounded">
   </section>
 
   <section>

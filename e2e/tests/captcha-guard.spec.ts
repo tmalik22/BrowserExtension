@@ -95,3 +95,30 @@ test('refuses to click when the page lays something over the widget', async () =
   const page = env.context.pages().filter((p) => p.url().includes('overlay-challenge.html')).pop()!;
   await expect(page.locator('#trap')).toHaveText('Buy now');
 });
+
+for (const mode of ['open', 'closed'] as const) {
+  test(`clicks a widget whose frame sits in a ${mode} shadow root (like Turnstile)`, async () => {
+    const path = `shadow-challenge.html?mode=${mode}`;
+    const sessionId = await openSession(path);
+    const obs = await rpc('captcha_observe', { sessionId });
+    expect(obs.value.located).toBe(true);
+    const act = await rpc('captcha_action', { sessionId, plan: clickCenter, settings: OPEN });
+    expect(act.ok, act.error).toBe(true);
+    const page = env.context.pages().filter((p) => p.url().includes(path)).pop()!;
+    await until(async () => (await page.evaluate(() => (window as any).__frame.contentWindow && true)) === true, 5000, 'frame');
+    const frame = page.frames().find((f) => f.url().includes('challenge-widget.html'))!;
+    await expect(frame.locator('#box')).toHaveText('VERIFIED');
+  });
+}
+
+test('refuses when the page lays something over the widget inside the shadow root', async () => {
+  const path = 'shadow-challenge.html?mode=closed&overlay=1';
+  const sessionId = await openSession(path);
+  const obs = await rpc('captcha_observe', { sessionId });
+  expect(obs.value.located).toBe(true);
+  const act = await rpc('captcha_action', { sessionId, plan: clickCenter, settings: OPEN });
+  expect(act.ok).toBe(false);
+  expect(act.error).toMatch(/not on the challenge widget/);
+  const page = env.context.pages().filter((p) => p.url().includes(path)).pop()!;
+  await expect(page.locator('#outside')).toHaveText('Outside');
+});

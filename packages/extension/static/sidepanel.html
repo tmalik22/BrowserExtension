@@ -118,7 +118,8 @@
           <label>CAPTCHA helper model
             <select id="set-captcha-helper"><option value="">Off</option></select>
           </label>
-          <p class="muted small">When a Cloudflare/Turnstile or other CAPTCHA blocks the page, this model solves just the challenge and the main model continues. Use a vision-capable model; a local 9B can click simple Turnstile boxes, but a stronger cloud model is more reliable on odd layouts.</p>
+          <p class="muted small">When a Cloudflare/Turnstile, reCAPTCHA or hCaptcha check blocks the page, this model solves just the challenge and the main model continues. It is built and tested for <strong>CaptchaKraken v1.2</strong>, a free local CAPTCHA model (about 7 GB of GPU memory, 16k context). Other vision models are experimental.</p>
+          <p id="captcha-solver-missing" class="muted small hidden">No CAPTCHA solver found. Install it with <code>ollama pull hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M</code>, start Ollama with <code>OLLAMA_CONTEXT_LENGTH=16384</code>, then click <strong>Refresh model lists</strong> in the model menu. <a href="https://github.com/tmalik22/BrowserExtension#-captcha-helper" target="_blank" rel="noopener noreferrer">Setup guide</a></p>
         </section>
 
         <section>

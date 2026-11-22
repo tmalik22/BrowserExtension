@@ -56,7 +56,7 @@ test('captcha observe and solve a live Turnstile widget', async () => {
     const reply = (await res.json()) as any;
     const plan = JSON.parse(reply.choices[0].message.content);
     await env.sw.evaluate(
-      ([id, p]) => (globalThis as any).__ba.onRpc('captcha_action', { sessionId: id, plan: p }),
+      ([id, p]) => (globalThis as any).__ba.onRpc('captcha_action', { sessionId: id, plan: p, settings: { allowPrivateNetworks: true, blockedSites: [] } }),
       [sessionId, plan],
     );
     await new Promise((r) => setTimeout(r, 5000));

@@ -180,6 +180,8 @@ export interface ProfileInfo {
   group?: string;
   /** Where it came from: models.json, local auto-detection, or a provider's live model list. */
   source?: 'config' | 'local' | 'catalog' | 'test';
+  /** A dedicated CAPTCHA model (CaptchaKraken protocol): offered only as the CAPTCHA helper. */
+  captchaSolver?: boolean;
 }
 
 /** A provider key the panel can set. The key itself never leaves the server. */

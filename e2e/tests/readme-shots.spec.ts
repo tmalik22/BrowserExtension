@@ -60,7 +60,7 @@ test.beforeAll(async () => {
   test.skip(!process.env.SHOTS, 'README screenshots only');
   fs.mkdirSync(RAW, { recursive: true });
   helperServer = await startHelperModel();
-  const helper = { id: 'helper', label: 'Gemma 3 12B (local)', provider: 'openai' as const, model: 'gemma3:12b', baseURL: `${helperServer.url}/v1`, apiKey: 'x', vision: true, stream: true };
+  const helper = { id: 'helper', label: 'CaptchaKraken', provider: 'openai' as const, model: 'gemma3:12b', baseURL: `${helperServer.url}/v1`, apiKey: 'x', vision: true, stream: true };
   env = await startEnv({}, { transcripts: true, profiles: [...PROFILES, helper, ...CATALOG_PROFILES] as any, gpu: { command: process.execPath, args: ['-e', GPU_SOURCE], intervalMs: 120 } });
 });
 test.afterAll(async () => {
@@ -74,12 +74,15 @@ async function scrub(panel: Page): Promise<void> {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       if (n.nodeValue?.includes('#script:')) n.nodeValue = n.nodeValue.replace(/\s*#script:[\w-]+/g, '');
-      if (n.nodeValue?.startsWith('Mock ·')) n.nodeValue = n.nodeValue.replace('Mock', 'Qwen3-VL 32B');
+      if (n.nodeValue?.startsWith('Mock ·') || n.nodeValue === 'Mock') n.nodeValue = n.nodeValue.replace('Mock', 'Qwen3-VL 32B');
       if (n.nodeValue && /localhost:\d+/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/https?:\/\/localhost:\d+\/demo-challenge\.html/g, 'https://kilnandco.example/shop').replace(/https?:\/\/localhost:\d+\//g, 'https://kilnandco.example/');
       if (n.nodeValue?.includes('hcaptcha challenge')) n.nodeValue = n.nodeValue.replace('hcaptcha challenge', 'CAPTCHA challenge');
     }
     const model = document.getElementById('model') as HTMLSelectElement | null;
-    if (model && [...model.options].some((o) => o.value === 'local-qwen')) model.value = 'local-qwen';
+    if (model && [...model.options].some((o) => o.value === 'local-qwen')) {
+      model.value = 'local-qwen';
+      model.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     const usage = document.getElementById('usage');
     if (usage) usage.textContent = '';
     const url = document.getElementById('set-url') as HTMLInputElement | null;
@@ -202,8 +205,13 @@ test('settings and GPU monitor', async () => {
   // The CAPTCHA helper picker, with a model selected.
   await panel.evaluate(() => {
     const sel = document.getElementById('set-captcha-helper') as HTMLSelectElement;
-    sel.append(new Option('Gemma 3 12B (Ollama, local)', 'shot'));
+    const g = document.createElement('optgroup');
+    g.label = 'CAPTCHA solver (recommended)';
+    g.append(new Option('CaptchaKraken Q4_K_M (Ollama) · CAPTCHA solver', 'shot'));
+    sel.prepend(g);
+    sel.prepend(sel.querySelector('option[value=""]')!);
     sel.value = 'shot';
+    document.getElementById('captcha-solver-missing')?.classList.add('hidden');
   });
   await panel.locator('#view-settings section', { hasText: 'CAPTCHA helper' }).screenshot({ path: path.join(OUT, 'panel-captcha-setting.png') });
 });

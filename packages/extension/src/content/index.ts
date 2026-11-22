@@ -115,9 +115,27 @@ function visibleRect(r: DOMRect): boolean {
 
 /** Locate the challenge widget in the top frame, or fall back to the whole viewport. */
 /** Is the top-frame point (CSS px) on a real challenge iframe? Guards the helper's direct clicks. */
+/** A shadow root, open or closed (extensions may read closed ones through chrome.dom). */
+function shadowRootOf(el: Element): ShadowRoot | null {
+  try {
+    return (chrome as any).dom?.openOrClosedShadowRoot?.(el) ?? el.shadowRoot;
+  } catch {
+    return el.shadowRoot;
+  }
+}
+
 function captchaHit(x: number, y: number): { ok: boolean } {
   if (window !== window.top || !Number.isFinite(x) || !Number.isFinite(y)) return { ok: false };
-  const el = document.elementFromPoint(x, y);
+  // Widgets such as Turnstile put their iframe inside a (often closed) shadow root, where the
+  // document-level hit is only the host. Descend to the deepest element: anything the page lays
+  // over the frame, inside the shadow root or out, is still what gets hit, and is refused.
+  let el = document.elementFromPoint(x, y);
+  for (let depth = 0; el && depth < 8; depth++) {
+    const root = shadowRootOf(el);
+    const inner = root?.elementFromPoint(x, y);
+    if (!inner || inner === el) break;
+    el = inner;
+  }
   return { ok: el instanceof HTMLIFrameElement && isChallengeUrl(el.src) };
 }
 

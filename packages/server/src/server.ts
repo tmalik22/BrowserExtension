@@ -29,7 +29,7 @@ import { ModelCatalog, mergeCatalog, type CatalogProvider } from './catalog.ts';
 import { detectLocalModels, mergeDetected, type LocalServer } from './local-models.ts';
 import { PairedClients, clientProof, newNonce, safeEqualHex, serverProof, startPairingExchange, whoamiProof, type PairPrompter } from './pairing.ts';
 
-export const SERVER_VERSION = '0.3.0';
+export const SERVER_VERSION = '0.3.1';
 const RECONNECT_GRACE_MS = 20_000;
 const EVENT_BUFFER = 2000;
 
@@ -415,6 +415,7 @@ export class AgentServer implements SessionHost {
     if (!profile) throw new Error(`Unknown model profile "${profileId}".`);
     const avail = profileAvailability(profile);
     if (!avail.available) throw new Error(`Model profile "${profile.label}" is unavailable: ${avail.reason}.`);
+    if (profile.captchaProtocol) throw new Error(`"${profile.label}" is a CAPTCHA solver, not a chat model. Choose it under Settings → CAPTCHA helper model, and pick another model for the task.`);
 
     if (!entry) {
       const clientId = opts.clientId ?? this.pickClient();

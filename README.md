@@ -63,7 +63,7 @@ It **stops before purchases, logins, sending, deleting** and more. You pick exac
 <td width="33%" valign="top">
 
 ### 🧩 CAPTCHA helper
-When a **Cloudflare, Turnstile, reCAPTCHA or hCaptcha** challenge blocks the page, a vision model of your choice clears it and the task carries on.
+When a **Cloudflare, Turnstile, reCAPTCHA or hCaptcha** challenge blocks the page, a free local CAPTCHA model ([CaptchaKraken](#what-you-need)) clears it and the task carries on.
 
 </td>
 <td width="33%" valign="top">
@@ -147,59 +147,71 @@ Running a 32B model on your own card? A **live GPU strip** shows temperature, fa
 
 ## 🧩 CAPTCHA helper
 
-<img src="docs/screenshots/captcha.png" alt="The agent opens a shop behind a human check. The side panel shows: CAPTCHA challenge detected, asking Gemma 3 12B (local) to solve it, then Challenge solved, continuing the task. The page shows Verification complete." width="100%">
+<img src="docs/screenshots/captcha.png" alt="The agent opens a shop behind a human check. The side panel shows: CAPTCHA challenge detected, asking CaptchaKraken to solve it, then Challenge solved, continuing the task. The page shows Verification complete." width="100%">
 
-Small and local models usually stall at a **Cloudflare challenge, Turnstile, reCAPTCHA or hCaptcha**. Browser Agent spots the challenge and hands just that part to a **helper model** you pick. The helper clears it and the main model picks the task back up, as above: *"challenge detected → solved → continuing"*.
+Most models stall at a **Cloudflare challenge, Turnstile, reCAPTCHA or hCaptcha**. Browser Agent spots the challenge and hands just that part to a dedicated CAPTCHA model running on your own machine. The model solves it and your main model picks the task back up, as above: *"challenge detected → solved → continuing"*.
 
-### Turn it on in 30 seconds
+### What you need
+
+The helper is built and tested for **[CaptchaKraken v1.2](https://huggingface.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF)**. It's a free, open-weights CAPTCHA model (Qwen3.5-9B base, LGPL-3.0) trained on 44 puzzle types from 10 vendors.
+
+| | Requirement |
+|---|---|
+| **Model** | CaptchaKraken v1.2 GGUF **plus its vision projector** (`mmproj-F16.gguf`). Without the projector it answers blind. Ollama fetches it for you. |
+| **Memory** | About **7 GB of GPU memory** for the recommended `Q4_K_M` (5.6 GB weights + 0.9 GB projector). `Q8_0` needs about 10.5 GB. It also runs on CPU, but slowly. |
+| **Context** | At least **16k tokens**. Ollama defaults to 4k on cards under 24 GB, so set `OLLAMA_CONTEXT_LENGTH=16384`. Too little context breaks animated puzzles. |
+| **Server** | **Ollama**, **LM Studio** or **llama.cpp** (`llama-server`) on the same machine as the agent server |
+| **Thinking** | Off. The model's builds default to that, and Browser Agent sends `reasoning_effort: "none"` as well. |
+
+> **Other vision models are experimental.** Settings will offer any vision model as a fallback, using a general "look, then click" mini-task. A strong cloud model can sometimes tick a simple Turnstile box, but image grids and puzzles are only tested with CaptchaKraken.
+
+### Set it up in two minutes (Ollama)
+
+```bash
+# 1. Start Ollama with a 16k context (PowerShell: $env:OLLAMA_CONTEXT_LENGTH=16384; ollama serve)
+OLLAMA_CONTEXT_LENGTH=16384 ollama serve
+
+# 2. In another terminal, download the model (about 6.5 GB)
+ollama pull hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M
+```
+
+3. Open the model menu in the side panel and click **Refresh model lists**. Browser Agent recognises CaptchaKraken and configures it automatically: its own JSON protocol, vision, 16k context and thinking off. It stays out of your chat models.
+4. Go to **⚙ Settings → Behaviour → CAPTCHA helper model**, pick **CaptchaKraken (Ollama) · CAPTCHA solver** under *CAPTCHA solver (recommended)*, and click **Save settings**.
 
 <table>
 <tr>
 <td width="55%" valign="top">
 
-1. Have a **vision-capable** profile in `models.json`. Cloud or local are both fine.
-2. Open the side panel, then **⚙ Settings → Behaviour → CAPTCHA helper model**.
-3. Pick the model and click **Save settings**.
+That's it. Next time a challenge shows up you'll see the hand-off right in the chat. Set the helper back to *Off* to disable it. **It's off by default.**
 
-That's it. Next time a challenge shows up you'll see the hand-off right in the chat. Set it back to *Off* to disable it. **It's off by default.**
+LM Studio works the same way: load the CaptchaKraken GGUF with its `mmproj` file, set the context length to 16384, then refresh.
 
 </td>
-<td width="45%" valign="top"><img src="docs/screenshots/panel-captcha-setting.png" alt="Settings, Behaviour section: CAPTCHA helper model dropdown set to Gemma 3 12B (Ollama, local)"></td>
+<td width="45%" valign="top"><img src="docs/screenshots/panel-captcha-setting.png" alt="Settings, Behaviour section: CAPTCHA helper model dropdown set to CaptchaKraken (Ollama), listed under CAPTCHA solver (recommended)"></td>
 </tr>
 </table>
 
-### How it works
-
-1. **Detection is mechanical, not guesswork.** After every navigation (and at the end of each turn) the extension probes the page's DOM and URL for challenge iframes, interstitial URLs and response-token fields.
-2. **An isolated mini-task.** The helper gets a fresh screenshot and its own conversation, with **at most 6 actions** (screenshot, read, click, key, form input, scroll, wait) to clear that challenge and nothing else.
-3. **A clean hand-back.** The main model gets a short note (solved: re-read the page and carry on; not solved: here's what's blocking) and continues or tells you.
-4. **Same safety rules.** The helper's actions go through the same policy as the main agent. A challenge that failed isn't retried on that tab until it changes, so it can't loop.
-
-### Picking a helper model
-
-| Helper | Good for |
-|---|---|
-| A strong cloud vision model | The most reliable, including unusual layouts and image grids |
-| A local ~9–12B vision model (Gemma 3, Qwen-VL…) | Simple "tick the box" Turnstile-style checks, free and offline |
-| Mix and match | Run a small local model for the task and a cloud model only for challenges |
-
 <details>
-<summary><b>Advanced: a dedicated CAPTCHA model server</b></summary>
+<summary><b>Using llama.cpp instead</b></summary>
 
 <br>
 
-If you run a model trained specifically on challenges behind an OpenAI-compatible endpoint, set `captchaProtocol: "kraken"`. Each round, the helper sends one screenshot of the challenge with the prompt templates that kind of model expects. It gets back a JSON action plan (click points, grid cells or text) and the extension applies it. It runs for up to 10 rounds.
+These are the server flags the live tests use. `-hf` downloads the model and its projector:
 
-These clicks are **confined to the located challenge widget**. If the widget can't be found, the helper refuses rather than clicking blind. It also refuses on blocked or private sites.
+```bash
+llama-server -hf CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M \
+  -ngl 99 -c 16384 -fa on --jinja --reasoning off --image-min-tokens 1024 \
+  --alias captchakraken --api-key-file captcha-key.txt --host 127.0.0.1 --port 8082
+```
 
-On Windows, `startScript` can point at a PowerShell script that starts the model server. It runs when the server starts with this helper selected, and again if `baseURL`'s `/health` stops responding.
+Then add it to `models.json` and pick it in Settings:
 
 ```jsonc
 {
-  "id": "captcha-local",
-  "label": "Local CAPTCHA model",
+  "id": "captchakraken",
+  "label": "CaptchaKraken (llama.cpp)",
   "provider": "openai",
-  "model": "your-captcha-model",
+  "model": "captchakraken",
   "baseURL": "http://127.0.0.1:8082/v1",
   "apiKeyFile": "C:/path/to/captcha-key.txt",   // or "apiKey" / "apiKeyEnv"
   "vision": true,
@@ -209,7 +221,16 @@ On Windows, `startScript` can point at a PowerShell script that starts the model
 }
 ```
 
+`captchaProtocol: "kraken"` is what marks it as a CAPTCHA solver. On Windows, the optional `startScript` points at a PowerShell script that starts the model server. It runs when the agent server starts with this helper selected, and again if `baseURL`'s `/health` stops responding.
+
 </details>
+
+### How it works
+
+1. **Detection is mechanical, not guesswork.** After every navigation (and at the end of each turn) the extension probes the page's DOM and URL for challenge iframes, interstitial URLs and response-token fields.
+2. **One focused job.** Each round, the helper captures just the challenge widget, sends it to CaptchaKraken with the prompts the model was trained on, and gets back a JSON plan: click points, grid cells, a drag or typed text. The extension carries it out. It stops after 10 rounds.
+3. **A clean hand-back.** The main model gets a short note (solved: re-read the page and carry on; not solved: here's what's blocking) and continues or tells you.
+4. **Fenced in.** Clicks are **confined to the located challenge widget**. Right before each click the extension checks that the point lands on the real provider's frame, including frames inside shadow DOM like Turnstile's, and not on anything the page placed on top. It refuses if the widget can't be found, and on blocked or private sites. A challenge that failed isn't retried on that tab until it changes, so it can't loop.
 
 > ⚖️ **Use it responsibly.** Many sites' terms forbid automated access, and challenges exist to enforce that. Only use the helper where you're allowed to automate.
 
@@ -513,7 +534,8 @@ The end-to-end suite covers forms, iframes (including cross-origin), shadow DOM,
 | Clicks do nothing on a site | Some sites ignore synthetic input in background tabs, so keep the agent's tab visible. Check the action output for "covered by …". |
 | **"This page cannot be controlled"** | `chrome://` pages, the Web Store and other extensions are off-limits. Navigate to a normal site. |
 | Another debugger is attached | Close DevTools on that tab. |
-| The CAPTCHA helper isn't in the list | Only **vision** profiles whose keys are set up appear. Check `npm run check-models`. |
+| The CAPTCHA helper isn't in the list | Start Ollama / LM Studio with CaptchaKraken loaded, then **Refresh model lists**. Only vision models that are ready appear. See [What you need](#what-you-need). |
+| The CAPTCHA helper never solves anything | The vision projector (`mmproj`) isn't loaded, or the context is under 16k. In Ollama, `ollama show` should list `vision`; set `OLLAMA_CONTEXT_LENGTH=16384`. |
 | A local model loops or picks wrong elements | Try `toolSet: "compact"`, a bigger or vision model, or `toolMode: "json"`. |
 
 ---

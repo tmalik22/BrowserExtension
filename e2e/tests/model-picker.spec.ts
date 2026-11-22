@@ -26,6 +26,7 @@ test.beforeAll(async () => {
     profiles: [
       { id: 'local-qwen', label: 'qwen3-vl:8b (Ollama)', provider: 'openai', model: 'qwen3-vl:8b', baseURL: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', vision: true, detected: true },
       { id: 'needs-key', label: 'Locked model', provider: 'openai', model: 'locked', baseURL: 'https://api.example/v1', apiKeyEnv: 'E2E_PICKER_MISSING_KEY', vision: false },
+      { id: 'ollama-captchakraken', label: 'CaptchaKraken Q4_K_M (Ollama) · CAPTCHA solver', provider: 'openai', model: 'hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M', baseURL: 'http://127.0.0.1:11434/v1', apiKey: 'ollama', vision: true, detected: true, captchaProtocol: 'kraken' },
       ...many,
     ] as any,
   });
@@ -86,4 +87,21 @@ test('no matches shows a hint', async () => {
   await panel.locator('.model-search').fill('zzzz-nothing');
   await expect(panel.locator('.model-empty')).toContainText('No models match');
   await panel.locator('.model-search').press('Escape');
+});
+
+test('a CAPTCHA solver is kept out of the chat models and offered first as the CAPTCHA helper', async () => {
+  await panel.locator('#model-btn').click();
+  await panel.locator('.model-search').fill('captcha');
+  await expect(panel.locator('#model-menu .model-item')).toHaveCount(0);
+  await panel.locator('.model-search').press('Escape');
+  expect(await panel.locator('#model option[value="ollama-captchakraken"]').count()).toBe(0);
+
+  await panel.locator('#btn-settings').click();
+  const groups = await panel.locator('#set-captcha-helper optgroup').evaluateAll((gs) =>
+    gs.map((g) => [(g as HTMLOptGroupElement).label, [...(g as HTMLOptGroupElement).querySelectorAll('option')].map((o) => o.value)]),
+  );
+  expect(groups[0]).toEqual(['CAPTCHA solver (recommended)', ['ollama-captchakraken']]);
+  expect(groups[1][0]).toBe('General vision models (experimental)');
+  expect(groups[1][1]).toContain('local-qwen');
+  await expect(panel.locator('#captcha-solver-missing')).toBeHidden();
 });

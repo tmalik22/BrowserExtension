@@ -236,7 +236,7 @@ export function profileGroup(p: ModelProfile): string {
 export function profileInfo(p: ModelProfile): ProfileInfo {
   const a = profileAvailability(p);
   const source = p.provider === 'mock' ? 'test' : p.catalog ? 'catalog' : p.detected ? 'local' : 'config';
-  return { id: p.id, label: p.label, provider: p.provider, model: p.model, vision: p.vision, available: a.available, unavailableReason: a.reason, group: profileGroup(p), source };
+  return { id: p.id, label: p.label, provider: p.provider, model: p.model, vision: p.vision, available: a.available, unavailableReason: a.reason, group: profileGroup(p), source, ...(p.captchaProtocol ? { captchaSolver: true } : {}) };
 }
 
 export function loadOrCreateToken(dataDir: string): string {

@@ -226,3 +226,18 @@ describe('config', () => {
     expect(s.enableOptional.javascript_exec).toBe(false);
   });
 });
+
+describe('CAPTCHA solver profiles', () => {
+  it('refuses to run a task on a dedicated CAPTCHA solver and marks it in the profile list', async () => {
+    const profiles = (server as any).profiles as Map<string, any>;
+    profiles.set('solver', { id: 'solver', label: 'CaptchaKraken', provider: 'openai', model: 'captchakraken', baseURL: 'http://127.0.0.1:1/v1', apiKey: 'x', vision: true, captchaProtocol: 'kraken' });
+    try {
+      expect(() => server.startOrContinue({ text: 'hi', profileId: 'solver' })).toThrow(/CAPTCHA solver, not a chat model/);
+      const { profileInfo } = await import('../src/config.ts');
+      expect(profileInfo(profiles.get('solver')).captchaSolver).toBe(true);
+      expect(profileInfo(profiles.get('mock')).captchaSolver).toBeUndefined();
+    } finally {
+      profiles.delete('solver');
+    }
+  });
+});

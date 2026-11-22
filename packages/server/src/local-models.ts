@@ -112,6 +112,15 @@ const MAX_PER_SERVER = 40;
 /** Model names come from whatever answers on the port: keep them short and printable. */
 const cleanName = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
 
+/** CaptchaKraken (a dedicated CAPTCHA vision model) — set up as a CAPTCHA helper, not a chat model. */
+export const CAPTCHA_SOLVER_NAME = /captcha-?kraken/i;
+
+/** "hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M" → "CaptchaKraken Q4_K_M (Ollama) · CAPTCHA solver". */
+function solverLabel(model: string, server: string): string {
+  const quant = model.match(/:(q\d\w*|f16)$/i)?.[1];
+  return `CaptchaKraken${quant ? ` ${quant.toUpperCase()}` : ''} (${server}) · CAPTCHA solver`;
+}
+
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
 /**
@@ -157,6 +166,11 @@ export async function detectLocalModels(
         keepImages: 1,
         timeoutMs: 600_000,
         detected: true,
+        // CaptchaKraken speaks its own JSON protocol (no tool calls), needs its vision projector and
+        // a 16k context, and must not think out loud (the answer would land outside `content`).
+        ...(CAPTCHA_SOLVER_NAME.test(f.model)
+          ? { label: solverLabel(f.model, srv.kind === 'ollama' ? 'Ollama' : 'LM Studio'), vision: true, captchaProtocol: 'kraken', contextTokens: 16384, extraBody: { reasoning_effort: 'none' }, timeoutMs: 120_000 }
+          : {}),
       } as ModelProfile);
     }
   }

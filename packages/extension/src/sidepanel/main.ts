@@ -69,7 +69,7 @@ const input = $<HTMLTextAreaElement>('input');
 const modelSel = $<HTMLSelectElement>('model');
 const picker = initModelPicker({
   select: modelSel,
-  profiles: () => state.profiles,
+  profiles: () => chatProfiles(),
   refresh: async () => {
     await request({ type: 'panel:refresh_models' }, 60_000).catch(() => {});
   },
@@ -581,17 +581,23 @@ function renderConn(): void {
   $<HTMLButtonElement>('btn-send').disabled = state.conn !== 'connected';
 }
 
+/** Models that can run a task (dedicated CAPTCHA solvers are only offered as the CAPTCHA helper). */
+function chatProfiles(): typeof state.profiles {
+  return state.profiles.filter((p) => !p.captchaSolver);
+}
+
 function renderProfiles(): void {
   const current = modelSel.value || localStorage.getItem('profile') || state.defaultProfileId;
   modelSel.replaceChildren();
-  for (const p of state.profiles) {
+  const profiles = chatProfiles();
+  for (const p of profiles) {
     const o = el('option', undefined, `${p.label}${p.available ? '' : ' (unavailable)'}`);
     o.value = p.id;
     o.disabled = !p.available;
     o.title = p.unavailableReason ?? `${p.provider} · ${p.model}${p.vision ? '' : ' · no vision'}`;
     modelSel.append(o);
   }
-  const pick = state.profiles.find((p) => p.id === current && p.available) ?? state.profiles.find((p) => p.id === state.defaultProfileId) ?? state.profiles.find((p) => p.available);
+  const pick = profiles.find((p) => p.id === current && p.available) ?? profiles.find((p) => p.id === state.defaultProfileId) ?? profiles.find((p) => p.available);
   if (pick) modelSel.value = pick.id;
   picker.render();
 }
@@ -790,10 +796,24 @@ function fillSettings(): void {
   $('settings-msg').textContent = '';
   const helperSel = $<HTMLSelectElement>('set-captcha-helper');
   helperSel.replaceChildren(new Option('Off', ''));
-  for (const p of state.profiles) {
-    if (p.provider === 'mock' || !p.vision || !p.available) continue;
-    helperSel.append(new Option(p.label, p.id));
+  // CaptchaKraken-style solvers are what the helper is built and tested for; any other vision
+  // model is offered as an experimental fallback.
+  const helpers = state.profiles.filter((p) => p.provider !== 'mock' && p.vision && p.available);
+  const solvers = helpers.filter((p) => p.captchaSolver);
+  const others = helpers.filter((p) => !p.captchaSolver);
+  const addGroup = (label: string, list: typeof helpers) => {
+    if (!list.length) return;
+    const g = document.createElement('optgroup');
+    g.label = label;
+    for (const p of list) g.append(new Option(p.label, p.id));
+    helperSel.append(g);
+  };
+  addGroup('CAPTCHA solver (recommended)', solvers);
+  addGroup('General vision models (experimental)', others);
+  if (s.captchaHelperProfileId && !helpers.some((p) => p.id === s.captchaHelperProfileId)) {
+    helperSel.append(new Option('(saved model is not available right now)', s.captchaHelperProfileId));
   }
+  $('captcha-solver-missing').classList.toggle('hidden', solvers.length > 0);
   helperSel.value = s.captchaHelperProfileId ?? '';
   $<HTMLSelectElement>('set-mode').value = s.permissionMode;
   $<HTMLTextAreaElement>('set-blocked').value = s.blockedSites.join('\n');

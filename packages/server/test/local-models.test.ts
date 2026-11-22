@@ -116,3 +116,30 @@ describe('mergeDetected', () => {
     expect(r.defaultProfileId).toBe('mock');
   });
 });
+
+describe('CaptchaKraken auto-setup', () => {
+  it('sets a detected CaptchaKraken up as a CAPTCHA solver (protocol, vision, 16k context, no thinking)', async () => {
+    const srv = await fake({
+      'GET /api/tags': () => ({ models: [{ name: 'hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M' }, { name: 'gemma3:12b' }] }),
+      'POST /api/show': (b) => ({ capabilities: ['completion', 'vision'] }),
+    });
+    const lm = await fake({ 'GET /v1/models': () => ({ data: [{ id: 'captchakraken-v1.2' }] }) });
+    try {
+      const { profiles } = await detectLocalModels([], [{ kind: 'ollama', url: srv.url }, { kind: 'lmstudio', url: lm.url }]);
+      const [ck, gemma, ckLm] = profiles;
+      expect(ck).toMatchObject({
+        label: 'CaptchaKraken Q4_K_M (Ollama) · CAPTCHA solver',
+        model: 'hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M',
+        vision: true,
+        captchaProtocol: 'kraken',
+        contextTokens: 16384,
+        extraBody: { reasoning_effort: 'none' },
+      });
+      expect(gemma.captchaProtocol).toBeUndefined();
+      expect(gemma.label).toBe('gemma3:12b (Ollama)');
+      expect(ckLm).toMatchObject({ label: 'CaptchaKraken (LM Studio) · CAPTCHA solver', vision: true, captchaProtocol: 'kraken' });
+    } finally {
+      await Promise.all([srv.close(), lm.close()]);
+    }
+  });
+});

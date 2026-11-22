@@ -45,7 +45,7 @@ Private by design
 • Your API keys stay on your computer. No account, no analytics, no telemetry. The developers never receive your data.
 
 Also included
-• Optional CAPTCHA helper: a vision model you choose clears Cloudflare / reCAPTCHA / hCaptcha checks so the task can continue.
+• Optional CAPTCHA helper: a free local CAPTCHA model (CaptchaKraken v1.2, run with Ollama, LM Studio or llama.cpp; about 7 GB of GPU memory) clears Cloudflare / reCAPTCHA / hCaptcha checks so the task can continue.
 • Searchable chat history, a GPU monitor for local models, and a CLI and HTTP API for developers.
 
 Setup takes about two minutes: download and start the server, open the side panel, click Pair, and check that both windows show the same code.
