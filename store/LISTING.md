@@ -52,6 +52,7 @@ Also included
 Setup takes about two minutes: download and start the server, open the side panel, click Pair, and check that both windows show the same code.
 
 Made by Trapped Ion Systems: https://trappedionsystems.com
+Like it? Tips welcome: https://ko-fi.com/timmalik
 Open source (MIT): https://github.com/tmalik22/BrowserExtension
 ```
 

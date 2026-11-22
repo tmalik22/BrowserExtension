@@ -10,6 +10,7 @@ An open-source Chrome agent that clicks, types, shops, fills forms and gets past
 Use **any model**: cloud APIs, your own GPU, self-hosted servers, fine-tunes, even uncensored and abliterated models.
 
 [![by Trapped Ion Systems](https://img.shields.io/badge/by-Trapped%20Ion%20Systems-7dd3e8?labelColor=070809)](https://trappedionsystems.com)
+[![Tip on Ko-fi](https://img.shields.io/badge/tip-Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/timmalik)
 [![CI](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml/badge.svg)](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/tmalik22/BrowserExtension?color=84cc16)](https://github.com/tmalik22/BrowserExtension/releases/latest)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
@@ -555,6 +556,12 @@ npm run build && npm test && npm run test:e2e
 - **New tool behaviour:** `packages/extension/src/background/executor.ts` plus a content-script handler, with an e2e test and a fixture page in `e2e/fixtures/site`.
 - **Refresh the README images:** `SHOTS=1 npx playwright test -c e2e/playwright.config.ts readme-shots`, then `python scripts/readme-images.py`. Everything is captured from the real extension using a scripted demo model.
 
+## ☕ Support the project
+
+Browser Agent is free and stays free. If you find it interesting or it saves you time, **[a tip on Ko-fi](https://ko-fi.com/timmalik)** keeps it going. Stars, bug reports and model reports help a lot too.
+
+<a href="https://ko-fi.com/timmalik"><img src="https://img.shields.io/badge/%E2%98%95%20Tip%20on%20Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Tip on Ko-fi"></a>
+
 ## 📄 License
 
 [MIT](LICENSE). Use it, fork it, ship it.
@@ -565,7 +572,7 @@ npm run build && npm test && npm run test:e2e
 <a href="https://trappedionsystems.com"><img src="docs/brand/tis-maker.svg" alt="Built by Trapped Ion Systems" width="390"></a>
 
 Browser Agent is an open-source project from **[Trapped Ion Systems](https://trappedionsystems.com)**, built by **[tmalik22](https://github.com/tmalik22)**.<br>
-If it's useful to you, a ⭐ helps others find it.
+If it's useful to you, a ⭐ helps others find it, and a [tip on Ko-fi](https://ko-fi.com/timmalik) helps keep it going.
 
 <sub>Not affiliated with any model provider. Product names are trademarks of their respective owners.</sub>
 

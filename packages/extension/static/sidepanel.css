@@ -273,3 +273,5 @@ button.chat.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var
 @media (prefers-color-scheme: dark) { .tis-mark .dot { color: #7dd3e8; } }
 .about-links { display: flex; gap: 12px; flex-wrap: wrap; }
 .about-links a { color: inherit; opacity: 0.8; }
+.about-tip { margin: 2px 0 0; }
+.about-tip a { color: var(--accent-ink); font-weight: 600; }

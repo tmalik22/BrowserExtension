@@ -119,3 +119,5 @@ footer .tis-mark { font-size: 15px; margin-right: 8px; }
   .maker .tis-mark { font-size: 44px; }
   .by-tis { display: none; }
 }
+.btn.kofi { border-color: #ff5e5b; color: #ffb3b1; }
+.btn.kofi:hover { border-color: #ff5e5b; background: rgba(255, 94, 91, 0.1); }
