@@ -1,0 +1,34 @@
+name: 🐛 Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you asked the agent to do, what it did, and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Steps, and the site or a minimal HTML page if possible. Please remove any personal data.
+  - type: input
+    id: model
+    attributes:
+      label: Model profile
+      description: Provider, model and server (e.g. "openai provider, qwen3-vl:32b on Ollama 0.9, toolSet compact")
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Browser Agent version or commit, Chrome version, Node version, OS
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server output / action output
+      description: Relevant lines from the server console or the expanded action in the side panel. Don't paste API keys or the pairing token.
+      render: text

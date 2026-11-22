@@ -1,0 +1,40 @@
+name: 🧠 Model compatibility report
+description: Share how a model works (or doesn't) with Browser Agent
+labels: [model-report]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Name and size/quant, e.g. "Qwen3-VL 32B Q4_K_M", "Llama 3.3 70B abliterated"
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: Provider / server
+      description: e.g. Ollama, LM Studio, vLLM, llama.cpp, OpenRouter
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: How well did it work?
+      options:
+        - Great, completes multi-step tasks
+        - OK on simple tasks
+        - Struggles (loops, wrong elements)
+        - Doesn't work
+    validations:
+      required: true
+  - type: textarea
+    id: profile
+    attributes:
+      label: Profile settings
+      description: Your models.json profile (remove keys), especially toolSet, toolMode, vision, keepImages.
+      render: jsonc
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: What tasks you tried, speed, GPU, anything surprising.

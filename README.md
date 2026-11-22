@@ -7,6 +7,8 @@
 An open-source Chrome agent that clicks, types, shops, fills forms and gets past CAPTCHAs.<br>
 Use **any model**: cloud APIs, your own GPU, self-hosted servers, fine-tunes, even uncensored and abliterated models.
 
+[![CI](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml/badge.svg)](https://github.com/tmalik22/BrowserExtension/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/tmalik22/BrowserExtension?color=c0623b)](https://github.com/tmalik22/BrowserExtension/releases/latest)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![Chrome MV3](https://img.shields.io/badge/Chrome-MV3%20extension-4285F4?logo=googlechrome&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
@@ -452,7 +454,9 @@ The end-to-end suite covers forms, iframes (including cross-origin), shadow DOM,
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome! Before opening a PR:
+Issues and PRs are welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)**. Found a security issue? Please report it privately ([SECURITY.md](SECURITY.md)). Tried a model? A [model compatibility report](https://github.com/tmalik22/BrowserExtension/issues/new?template=model_report.yml) helps everyone. Questions and setups go in [Discussions](https://github.com/tmalik22/BrowserExtension/discussions).
+
+Before opening a PR:
 
 ```bash
 npm run build && npm test && npm run test:e2e
