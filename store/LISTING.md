@@ -61,8 +61,12 @@ Open source (MIT): https://github.com/tmalik22/BrowserExtension
 | Small promo tile (440×280) | `promo-small.png` |
 | Marquee promo tile (1400×560, optional) | `promo-marquee.png` |
 
-**Official URL / homepage:** `https://github.com/tmalik22/BrowserExtension`
-**Support URL:** `https://github.com/tmalik22/BrowserExtension/issues`
+The store won't accept GitHub links for these, so they point at the project website in `site/`, deployed with Cloudflare Pages (replace `YOUR-SITE` with your domain or `*.pages.dev` address):
+
+**Official URL / homepage:** `https://YOUR-SITE/`
+**Support URL:** `https://YOUR-SITE/support`
+
+The **Official URL** must be a site you've verified in [Google Search Console](https://search.google.com/search-console). Add your domain there: DNS verification is easiest with Cloudflare.
 
 ## 4. Privacy practices tab
 
@@ -96,7 +100,7 @@ Browser Agent lets the user delegate browsing tasks to an AI model of their choi
 
 (The data goes only to the user's own local server, and from there to the model provider *the user* configures.)
 
-**Privacy policy URL:** `https://github.com/tmalik22/BrowserExtension/blob/main/PRIVACY.md`
+**Privacy policy URL:** `https://YOUR-SITE/privacy`
 
 ## 5. Distribution
 

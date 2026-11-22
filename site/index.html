@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser Agent: your AI agent in Chrome, with any model</title>
+<meta name="description" content="Open-source AI agent that works in Chrome with any model: local (Ollama, LM Studio, vLLM, llama.cpp), self-hosted, or your own API keys. You approve anything that matters.">
+<meta property="og:title" content="Browser Agent: your AI agent in Chrome, with any model">
+<meta property="og:description" content="Open-source AI agent for Chrome. Local, self-hosted or cloud models. You approve anything that matters.">
+<meta property="og:image" content="assets/social-preview.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <a class="brand" href="/"><img src="assets/logo-512.png" alt="">Browser Agent</a>
+    <div class="links">
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#captcha">CAPTCHA helper</a>
+      <a href="/support">Support</a>
+      <a href="https://github.com/tmalik22/BrowserExtension">GitHub</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <h1>Your AI agent in Chrome.<br><em>Any model you want.</em></h1>
+    <p class="lead">Browser Agent clicks, types, shops and fills in forms in your real browser, and stops for your OK before anything that matters. Run it on your own GPU, a self-hosted server, or your own API keys. Open source and free.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/tmalik22/BrowserExtension/releases/latest">Download</a>
+      <a class="btn" href="https://github.com/tmalik22/BrowserExtension">View on GitHub</a>
+    </div>
+    <p class="note">Chrome Web Store listing coming soon · MIT licensed · No account, no telemetry</p>
+    <div class="demo"><img src="assets/demo.gif" alt="Demo: the agent adds a mug to the cart, stops to ask before placing the order, then finishes after approval" width="1011" height="696"></div>
+  </header>
+
+  <section id="features">
+    <h2>Why Browser Agent</h2>
+    <p class="sub">Built for people who want an AI browser agent on their own terms.</p>
+    <div class="grid">
+      <div class="card"><div class="icon">🔌</div><h3>Any model</h3><p>Anthropic, OpenAI, Gemini, OpenRouter, Groq, or anything OpenAI-compatible. Switch models per task.</p></div>
+      <div class="card"><div class="icon">🖥️</div><h3>Fully local</h3><p>Ollama, LM Studio, vLLM or llama.cpp on your own GPU. Installed models show up automatically.</p></div>
+      <div class="card"><div class="icon">🔓</div><h3>Unfiltered models OK</h3><p>Uncensored and abliterated models work. Safety comes from the policy engine, not from the model refusing.</p></div>
+      <div class="card"><div class="icon">🛑</div><h3>You hold the brakes</h3><p>It asks before purchases, logins, passwords, sending, deleting and more, with 11 separate switches.</p></div>
+      <div class="card"><div class="icon">🧩</div><h3>CAPTCHA helper</h3><p>Optional: a vision model you pick clears Cloudflare, reCAPTCHA or hCaptcha checks so the task continues.</p></div>
+      <div class="card"><div class="icon">🔑</div><h3>Private by design</h3><p>Keys stay on your computer. The extension only talks to your own local server. No telemetry.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="split">
+      <div>
+        <h2>You decide what needs approval</h2>
+        <p class="sub">A server-side policy checks every single action before it runs, whatever the model wants.</p>
+        <ul>
+          <li>Purchases, payments, logins, password and card fields</li>
+          <li>Sending, posting, deleting, account and security changes</li>
+          <li>Accepting terms, page dialogs, scripts and uploads</li>
+          <li>Reading a site you haven't approved, even after a redirect or popup</li>
+        </ul>
+        <p class="sub">All on by default. Untick what you're happy for it to do alone.</p>
+      </div>
+      <img src="assets/panel-settings.png" alt="Settings: the Ask me before list of approval switches" loading="lazy" class="settings-shot"
+    </div>
+  </section>
+
+  <section id="captcha">
+    <h2>Gets past CAPTCHA checks</h2>
+    <p class="sub">When a challenge blocks the page, Browser Agent hands just that part to a helper model you choose, then carries on. It only acts on genuine challenge widgets, and it's off by default.</p>
+    <img src="assets/captcha.png" alt="The agent detects a CAPTCHA, a local helper model solves it, and the task continues" loading="lazy" class="rounded"
+  </section>
+
+  <section>
+    <h2>Works with the models you already run</h2>
+    <p class="sub">Tuned for small local models too: a compact toolset, a JSON mode for models without tool calling, and a no-vision mode.</p>
+    <div class="models">
+      <span>Ollama</span><span>LM Studio</span><span>vLLM</span><span>llama.cpp</span><span>SGLang</span><span>KoboldCpp</span>
+      <span>Anthropic</span><span>OpenAI</span><span>Google Gemini</span><span>OpenRouter</span><span>Groq</span><span>NVIDIA NIM</span><span>Any OpenAI-compatible API</span>
+    </div>
+  </section>
+
+  <section id="setup">
+    <h2>Set up in about two minutes</h2>
+    <p class="sub">You need Chrome and <a href="https://nodejs.org/">Node.js 20+</a>.</p>
+    <div class="steps">
+      <div class="card"><h3>Start the server</h3><p>Download the server zip from the <a href="https://github.com/tmalik22/BrowserExtension/releases/latest">latest release</a>, unzip it, and run <code>Start Browser Agent.cmd</code> (Windows) or <code>./start.sh</code>.</p></div>
+      <div class="card"><h3>Add the extension</h3><p>Install it from the Chrome Web Store (coming soon), or load the extension zip from the release as an unpacked extension.</p></div>
+      <div class="card"><h3>Pair and go</h3><p>Click <b>Pair this browser</b>, check that the code matches the server window, then type a task. That's it.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="callout">
+      <h2>Free and open source</h2>
+      <p class="sub centered">MIT licensed. Read the code, run it your way, and help make it better.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/tmalik22/BrowserExtension">Star on GitHub</a>
+        <a class="btn" href="/support">Get help</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Browser Agent · Built by <a class="inline" href="https://github.com/tmalik22">tmalik22</a></span>
+    <span><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="https://github.com/tmalik22/BrowserExtension">GitHub</a><a href="https://github.com/tmalik22/BrowserExtension/blob/main/LICENSE">License</a></span>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support · Browser Agent</title>
+<meta name="description" content="Get help with Browser Agent: setup, pairing, models, troubleshooting, bug reports and security reports.">
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <a class="brand" href="/"><img src="assets/logo-512.png" alt="">Browser Agent</a>
+    <div class="links"><a href="/">Home</a><a href="/privacy">Privacy</a><a href="https://github.com/tmalik22/BrowserExtension">GitHub</a></div>
+  </nav>
+
+  <main class="prose">
+    <h1>Support</h1>
+    <p>Browser Agent is free, open-source software. Here's how to get help.</p>
+
+    <div class="grid spaced">
+      <a class="card" href="https://github.com/tmalik22/BrowserExtension#-quick-start"><h3>📘 Setup guide</h3><p>Step-by-step install, pairing and model setup.</p></a>
+      <a class="card" href="https://github.com/tmalik22/BrowserExtension/issues/new/choose"><h3>🐛 Report a bug</h3><p>Something not working? Open an issue on GitHub.</p></a>
+      <a class="card" href="https://github.com/tmalik22/BrowserExtension/discussions"><h3>💬 Ask a question</h3><p>Questions, ideas and model setups in Discussions.</p></a>
+      <a class="card" href="https://github.com/tmalik22/BrowserExtension/security/advisories/new"><h3>🔒 Security issue</h3><p>Please report vulnerabilities privately.</p></a>
+    </div>
+
+    <h2>Common questions</h2>
+    <details>
+      <summary>The side panel says "Start the agent server"</summary>
+      <p>The extension needs its small local server running. Download the server zip from the <a href="https://github.com/tmalik22/BrowserExtension/releases/latest">latest release</a>, unzip it, and run <code>Start Browser Agent.cmd</code> (Windows) or <code>./start.sh</code> (macOS/Linux). Keep that window open. It needs <a href="https://nodejs.org/">Node.js 20+</a>.</p>
+    </details>
+    <details>
+      <summary>How do I pair the extension with the server?</summary>
+      <p>Click <b>Pair this browser</b> in the side panel. The panel and the server window both show a 6-digit code. If they match, click <b>Codes match</b> in the panel and type <code>y</code> in the server window. Only approve a code you started pairing for yourself.</p>
+    </details>
+    <details>
+      <summary>My Ollama / LM Studio models don't appear</summary>
+      <p>Start Ollama or LM Studio <em>before</em> the Browser Agent server, then restart the server. Models are detected at startup. Pick one in the model menu: a detected model is never chosen automatically.</p>
+    </details>
+    <details>
+      <summary>How do I use a cloud model?</summary>
+      <p>Open the side panel, then ⚙ Settings → API keys, and paste your key. It's stored by the server on your computer and never sent back to the browser.</p>
+    </details>
+    <details>
+      <summary>Why does Chrome say it's "debugging this browser"?</summary>
+      <p>Chrome shows that bar for any extension that uses its DevTools interface, which Browser Agent uses to click and type reliably. It disappears when the task ends. Clicking <b>Cancel</b> on it stops the task.</p>
+    </details>
+    <details>
+      <summary>The agent asks for approval a lot</summary>
+      <p>That's on purpose for anything consequential. You can switch off the kinds of actions you're happy for it to do alone in ⚙ Settings → Permissions → "Ask me before…".</p>
+    </details>
+    <details>
+      <summary>Can it see my other tabs?</summary>
+      <p>No. Each task works only in its own tab group. Your other tabs are never read or touched.</p>
+    </details>
+
+    <p class="more">More answers in the <a href="https://github.com/tmalik22/BrowserExtension#-troubleshooting">troubleshooting guide</a>.</p>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Browser Agent</span>
+    <span><a href="/">Home</a><a href="/privacy">Privacy</a><a href="https://github.com/tmalik22/BrowserExtension">GitHub</a></span>
+  </div>
+</footer>
+</body>
+</html>

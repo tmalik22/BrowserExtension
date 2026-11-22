@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Browser Agent</title>
+<meta name="description" content="Browser Agent privacy policy: the developers never receive your data. No accounts, analytics or telemetry.">
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <a class="brand" href="/"><img src="assets/logo-512.png" alt="">Browser Agent</a>
+    <div class="links"><a href="/">Home</a><a href="/support">Support</a><a href="https://github.com/tmalik22/BrowserExtension">GitHub</a></div>
+  </nav>
+
+  <main class="prose">
+    <h1>Privacy policy</h1>
+    <p><em>Last updated: 22 November 2026</em></p>
+    <p>Browser Agent is an open-source browser extension plus a small server that <b>you run on your own computer</b>. This policy explains what data it handles and where that data goes.</p>
+
+    <h2>The short version</h2>
+    <ul>
+      <li><b>We (the developers) never receive your data.</b> There is no Browser Agent cloud service, no account, no analytics, no telemetry and no tracking.</li>
+      <li>The extension only talks to <b>the Browser Agent server you run</b>, at <code>127.0.0.1</code> (your own computer) by default.</li>
+      <li>Your server sends page content and your instructions <b>only to the AI model provider you choose</b>: a local model on your machine (e.g. Ollama or LM Studio), or a cloud API you add your own key for.</li>
+    </ul>
+
+    <h2>What the extension handles, and why</h2>
+    <table>
+      <tr><th>Data</th><th>Why</th><th>Where it goes</th></tr>
+      <tr><td><b>Website content</b> of tabs the agent works in (page text, an outline of the page, screenshots, URLs and titles)</td><td>So the AI model you chose can see the page and carry out your task</td><td>Your local Browser Agent server, then the model provider you configured</td></tr>
+      <tr><td><b>Your instructions</b> typed into the side panel</td><td>To tell the agent what to do</td><td>Same as above</td></tr>
+      <tr><td><b>Text the agent types</b> for you (e.g. form fields)</td><td>To fill in forms you asked it to</td><td>Stays in the page. Password and card fields are masked in logs</td></tr>
+      <tr><td><b>Settings</b> (permission choices, allowed and blocked sites, server address, pairing secret)</td><td>To remember your preferences and connect to your server</td><td>Chrome's local extension storage and your server's <code>data/</code> folder</td></tr>
+    </table>
+    <p>The agent only works in the tabs of the task you started (its own tab group). <b>It does not read your other tabs</b> or your browsing history.</p>
+
+    <h2>Model providers</h2>
+    <p>If you use a <b>cloud</b> model (for example Anthropic, OpenAI, Google, OpenRouter or Groq), your server sends the page content and instructions for each task to that provider, using <b>your own API key</b>. Their privacy policies apply to that data. With a <b>local</b> model (Ollama, LM Studio, vLLM, llama.cpp), nothing leaves your computer.</p>
+
+    <h2>Storage on your computer</h2>
+    <p>Your server keeps, in its <code>data/</code> folder on your machine: your API keys (readable only by your user account), settings, the pairing token and paired-browser secrets, and task transcripts and screenshots for the chat history. You can delete this folder at any time. Set <code>AGENT_TRANSCRIPTS=0</code> to stop saving transcripts.</p>
+
+    <h2>Selling and sharing</h2>
+    <p>We do not sell, rent or share any data. We have no way to: your data never reaches us.</p>
+
+    <h2>Children</h2>
+    <p>Browser Agent is not directed at children under 13.</p>
+
+    <h2>Changes and contact</h2>
+    <p>Changes to this policy are published on this page and in the <a href="https://github.com/tmalik22/BrowserExtension/blob/main/PRIVACY.md">GitHub repository</a>. Questions: see <a href="/support">Support</a>.</p>
+  </main>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Browser Agent</span>
+    <span><a href="/">Home</a><a href="/support">Support</a><a href="https://github.com/tmalik22/BrowserExtension">GitHub</a></span>
+  </div>
+</footer>
+</body>
+</html>
