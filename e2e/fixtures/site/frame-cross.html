@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cross</title></head>
+<body style="font-family:sans-serif"><h2>Card details</h2>
+<label>Card holder <input id="holder"></label><br>
+<button id="pay">Save card holder</button> <button id="paynow">Pay now</button>
+<script>
+document.getElementById('pay').onclick = function () {
+  parent.postMessage({ fromFrame: 'cross clicked: ' + document.getElementById('holder').value }, '*');
+  this.textContent = 'Cross clicked';
+};
+document.getElementById('paynow').onclick = function () { parent.postMessage({ fromFrame: 'PAID' }, '*'); };
+</script>
+</body></html>

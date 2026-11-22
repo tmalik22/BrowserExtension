@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Editor</title></head>
+<body style="font-family:sans-serif;padding:20px"><h1>Editor</h1>
+<div id="ed" contenteditable="true" aria-label="Rich editor" style="border:1px solid #999;min-height:60px;padding:6px">Old text</div>
+<p id="log"></p>
+<script>
+document.getElementById('ed').addEventListener('input', function () {
+  document.getElementById('log').textContent = 'editor: ' + document.getElementById('ed').innerText;
+});
+</script>
+</body></html>

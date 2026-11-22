@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Shop</title></head>
+<body style="font-family:sans-serif;padding:20px"><h1>Tiny Shop</h1>
+<div class="product"><h2>Blue Mug</h2><p>Price: $12.50</p><button data-item="Blue Mug">Add to cart</button></div>
+<div class="product"><h2>Red Pen</h2><p>Price: $3.20</p><button data-item="Red Pen">Add to cart</button></div>
+<p>Cart: <span id="cart">empty</span></p>
+<button id="order">Place order</button>
+<p id="log"></p>
+<script>
+var items = [];
+document.querySelectorAll('[data-item]').forEach(function (b) {
+  b.onclick = function () { items.push(b.dataset.item); document.getElementById('cart').textContent = items.join(', '); };
+});
+document.getElementById('order').onclick = function () { document.getElementById('log').textContent = 'ORDER PLACED'; };
+</script>
+</body></html>

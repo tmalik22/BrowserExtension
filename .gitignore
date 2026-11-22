@@ -1,0 +1,18 @@
+node_modules/
+dist/
+dist-test/
+data/
+.env
+models.json
+test-results/
+playwright-report/
+e2e/.profile*/
+*.log
+
+# build / editor artefacts
+*.tsbuildinfo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+docs/screenshots/raw/

@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Shadow</title></head>
+<body style="font-family:sans-serif;padding:20px"><h1>Shadow DOM</h1>
+<search-box></search-box>
+<fancy-card><span slot="title">Slotted title</span></fancy-card>
+<p id="log"></p>
+<script>
+customElements.define('search-box', class extends HTMLElement {
+  constructor() {
+    super();
+    const r = this.attachShadow({ mode: 'open' });
+    const i = document.createElement('input'); i.placeholder = 'Search products'; i.setAttribute('aria-label', 'Search products');
+    const b = document.createElement('button'); b.textContent = 'Go';
+    b.onclick = () => { document.getElementById('log').textContent = 'searched: ' + i.value; };
+    r.append(i, b);
+  }
+});
+customElements.define('fancy-card', class extends HTMLElement {
+  constructor() {
+    super();
+    const r = this.attachShadow({ mode: 'open' });
+    const h = document.createElement('h2'); const s = document.createElement('slot'); s.name = 'title'; h.append(s);
+    const b = document.createElement('button'); b.textContent = 'Shadow action';
+    b.onclick = () => { document.getElementById('log').textContent = 'shadow action'; };
+    r.append(h, b);
+  }
+});
+</script></body></html>

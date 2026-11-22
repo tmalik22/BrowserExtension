@@ -1,0 +1,33 @@
+{
+  "name": "browser-agent",
+  "private": true,
+  "license": "MIT",
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @ba/extension && npm run typecheck",
+    "build:ext": "npm run build -w @ba/extension",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/server --noEmit && tsc -p packages/extension --noEmit && tsc -p tsconfig.json --noEmit",
+    "server": "tsx packages/server/src/index.ts",
+    "dev": "tsx watch packages/server/src/index.ts",
+    "task": "tsx packages/server/src/cli.ts",
+    "check-models": "tsx packages/server/src/check-models.ts",
+    "test": "vitest run",
+    "test:e2e": "npm run build:ext && playwright test -c e2e/playwright.config.ts",
+    "test:all": "npm test && npm run test:e2e",
+    "eval": "npm run build:ext && tsx evals/run.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

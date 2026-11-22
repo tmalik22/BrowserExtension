@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Frames</title></head>
+<body style="font-family:sans-serif;padding:20px"><h1>Frames</h1>
+<p>Same-origin frame:</p>
+<iframe id="same" title="Same origin widget" src="frame-inner.html" style="width:420px;height:150px;border:2px solid #999;margin-left:30px"></iframe>
+<p>Cross-origin frame:</p>
+<iframe id="cross" title="Payment widget" style="width:420px;height:170px;border:4px solid #999;padding:6px"></iframe>
+<p id="log"></p>
+<script>
+var other = location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+document.getElementById('cross').src = location.protocol + '//' + other + ':' + location.port + '/frame-cross.html';
+addEventListener('message', function (e) { if (e.data && e.data.fromFrame) document.getElementById('log').textContent = e.data.fromFrame; });
+</script></body></html>

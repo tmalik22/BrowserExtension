@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Canvas</title></head>
+<body style="margin:0;font-family:sans-serif"><canvas id="c" width="600" height="300" style="display:block"></canvas><p id="log"></p>
+<script>
+var c = document.getElementById('c'), x = c.getContext('2d');
+x.fillStyle = '#eee'; x.fillRect(0, 0, 600, 300);
+x.fillStyle = '#2a7'; x.fillRect(400, 200, 120, 50);
+x.fillStyle = '#fff'; x.font = '20px sans-serif'; x.fillText('PLAY', 432, 232);
+c.onclick = function (e) {
+  var r = c.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  document.getElementById('log').textContent = (px >= 400 && px <= 520 && py >= 200 && py <= 250) ? 'play pressed' : 'missed ' + Math.round(px) + ',' + Math.round(py);
+};
+</script></body></html>

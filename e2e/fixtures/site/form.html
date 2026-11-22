@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Login</title>
+<style>body{font-family:sans-serif;padding:20px} label{display:block;margin:8px 0}</style></head>
+<body><main>
+<h1>Sign in</h1>
+<form id="f">
+  <label>Username <input id="user" name="user" autocomplete="username"></label>
+  <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
+  <label>Country <select id="country"><option value="">Choose…</option><option value="us">United States</option><option value="ca">Canada</option><option value="de">Germany</option></select></label>
+  <label><input type="checkbox" id="remember"> Remember me</label>
+  <fieldset><legend>Plan</legend>
+    <label><input type="radio" name="plan" value="free" checked> Free</label>
+    <label><input type="radio" name="plan" value="pro"> Pro</label>
+  </fieldset>
+  <label>Nickname (controlled) <input id="nick" placeholder="Pick a nickname"></label>
+  <div>Controlled value: <span id="nick-state"></span></div>
+  <label>Bio <textarea id="bio" rows="2"></textarea></label>
+  <button type="submit">Sign in</button>
+</form>
+<p id="result" role="status"></p>
+</main>
+<script>
+// A "controlled" input like React: state only changes on input events, and the DOM value is
+// re-rendered from state (so setting .value without events is lost).
+let nick = '';
+const nickEl = document.getElementById('nick');
+nickEl.addEventListener('input', (e) => { nick = e.target.value; render(); });
+function render() { document.getElementById('nick-state').textContent = nick; if (nickEl.value !== nick) nickEl.value = nick; }
+setInterval(render, 100);
+document.getElementById('f').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const plan = document.querySelector('input[name=plan]:checked').value;
+  document.getElementById('result').textContent =
+    'Welcome ' + document.getElementById('user').value +
+    '; pw=' + document.getElementById('pw').value.length + ' chars' +
+    '; country=' + document.getElementById('country').value +
+    '; remember=' + document.getElementById('remember').checked +
+    '; plan=' + plan + '; nick=' + nick + '; bio=' + document.getElementById('bio').value;
+});
+</script></body></html>

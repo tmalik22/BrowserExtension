@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Browser Agent</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <span class="title">Browser Agent</span>
+      </div>
+      <div class="conn" id="conn" title="Connection to the agent server">
+        <span class="dot"></span><span class="conn-label">Connecting…</span>
+      </div>
+      <div class="actions">
+        <button class="icon" id="btn-history" title="Chat history" aria-label="Chat history">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon" id="btn-new" title="New task" aria-label="New task">+</button>
+        <button class="icon" id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+    <section id="gpu" class="gpu hidden" aria-label="GPU monitor">
+      <button type="button" id="gpu-toggle" class="gpu-row" aria-expanded="false" aria-controls="gpu-details" title="Show GPU details">
+        <span id="gpu-dot" class="gpu-dot"></span>
+        <span id="gpu-summary" class="gpu-summary"></span>
+        <svg id="gpu-spark" class="spark" viewBox="0 0 60 16" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <span class="gpu-caret" aria-hidden="true">&#9662;</span>
+      </button>
+      <div id="gpu-alerts"></div>
+      <div id="gpu-details" class="gpu-details hidden">
+        <dl id="gpu-stats" class="gpu-stats"></dl>
+        <figure class="gpu-fig"><figcaption>Temperature (&deg;C), last 5 min</figcaption><div class="chart" id="gpu-chart-temp"></div></figure>
+        <figure class="gpu-fig"><figcaption>Power (W), last 5 min</figcaption><div class="chart" id="gpu-chart-power"></div></figure>
+        <label class="check small"><input type="checkbox" id="gpu-notify" /> Desktop notifications for GPU alerts</label>
+      </div>
+    </section>
+
+    <main id="view-chat" class="view">
+      <div id="banner" class="banner hidden"></div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <div id="archived-note" class="archived-note hidden">This chat is from before the agent restarted. Send a message to carry on: the agent gets a summary of it.</div>
+      <div id="status" class="status hidden">
+        <span class="spinner" aria-hidden="true"></span><span id="status-text">Working…</span>
+      </div>
+      <form id="composer" class="composer">
+        <textarea id="input" rows="2" placeholder="What should I do in this tab?" aria-label="Task"></textarea>
+        <div class="composer-row">
+          <select id="model" aria-label="Model"></select>
+          <span class="usage" id="usage"></span>
+          <button type="button" id="btn-stop" class="btn danger hidden">Stop</button>
+          <button type="submit" id="btn-send" class="btn primary">Send</button>
+        </div>
+      </form>
+    </main>
+
+    <main id="view-history" class="view hidden">
+      <div class="history">
+        <div class="history-head">
+          <button class="link" id="btn-history-back">← Back</button>
+          <h2>Chats</h2>
+        </div>
+        <input type="search" id="chat-search" placeholder="Search chats" aria-label="Search chats" />
+        <div id="chat-list-msg" class="muted"></div>
+        <div id="chat-list" class="chat-list"></div>
+      </div>
+    </main>
+
+    <main id="view-settings" class="view hidden">
+      <div class="settings">
+        <button class="link" id="btn-back">← Back</button>
+
+        <section>
+          <h2>Connection</h2>
+          <label>Agent server URL<input id="set-url" type="text" spellcheck="false" placeholder="ws://127.0.0.1:7878/ws" /></label>
+          <label>Pairing token<input id="set-token" type="password" spellcheck="false" autocomplete="off" placeholder="Printed by the server on startup" /></label>
+          <div class="row"><button class="btn primary" id="btn-connect">Save &amp; connect</button><span id="conn-detail" class="muted"></span></div>
+        </section>
+
+        <section>
+          <h2>API keys</h2>
+          <p class="muted small">For cloud models. Keys are kept by the agent server on this computer and never shown again. Saving runs one small test request per model.</p>
+          <div id="api-keys" class="keys"><p class="muted small">Connect to the server to add keys.</p></div>
+        </section>
+
+        <section>
+          <h2>Permissions</h2>
+          <label>Mode
+            <select id="set-mode">
+              <option value="ask">Ask before acting on new sites (recommended)</option>
+              <option value="auto">Act on any site, confirm risky actions</option>
+              <option value="yolo">Never ask (sandboxed browsers only)</option>
+            </select>
+          </label>
+          <h3>Ask me before…</h3>
+          <p class="muted small">The agent stops and waits for your OK before these actions. Untick anything you're happy for it to do on its own. In "Never ask" mode none of these are asked.</p>
+          <div id="confirm-list" class="confirm-list"></div>
+          <div class="row confirm-bulk">
+            <button type="button" class="btn" id="btn-confirm-all">All on</button>
+            <button type="button" class="btn" id="btn-confirm-none">All off</button>
+          </div>
+          <h3>Allowed sites</h3>
+          <ul id="allowed-sites" class="sites"></ul>
+          <h3>Blocked sites</h3>
+          <textarea id="set-blocked" rows="3" placeholder="one domain per line, e.g. mybank.com"></textarea>
+          <label class="check"><input type="checkbox" id="set-private" /> Allow localhost / private networks</label>
+        </section>
+
+        <section>
+          <h2>Behaviour</h2>
+          <label>Max steps per message<input id="set-maxsteps" type="number" min="1" max="500" /></label>
+          <label class="check"><input type="checkbox" id="set-autoshot" /> Attach a screenshot after each batch (vision models)</label>
+          <label class="check"><input type="checkbox" id="set-lock" /> Block my mouse &amp; keyboard in the agent's tab while it works</label>
+          <label>CAPTCHA helper model
+            <select id="set-captcha-helper"><option value="">Off</option></select>
+          </label>
+          <p class="muted small">When a Cloudflare/Turnstile or other CAPTCHA blocks the page, this model solves just the challenge and the main model continues. Use a vision-capable model; a local 9B can click simple Turnstile boxes, but a stronger cloud model is more reliable on odd layouts.</p>
+        </section>
+
+        <section>
+          <h2>Advanced tools</h2>
+          <p class="muted small">Off by default: they widen what a malicious page could make the agent do. Changes apply to new tasks.</p>
+          <label class="check"><input type="checkbox" id="set-js" /> javascript_exec — run JavaScript in pages</label>
+          <label class="check"><input type="checkbox" id="set-upload" /> file_upload — upload files from the server's upload folder</label>
+          <label class="check"><input type="checkbox" id="set-console" /> read_console — read console messages</label>
+          <label class="check"><input type="checkbox" id="set-network" /> read_network — read network requests</label>
+        </section>
+
+        <div class="row"><button class="btn primary" id="btn-save-settings">Save settings</button><span id="settings-msg" class="muted"></span></div>
+      </div>
+    </main>
+
+    <script src="sidepanel.js" type="module"></script>
+  </body>
+</html>

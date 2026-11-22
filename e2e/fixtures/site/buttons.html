@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Buttons</title>
+<style>
+body{font-family:sans-serif;padding:20px;height:2000px}
+#banner{position:fixed;left:0;right:0;bottom:0;height:120px;background:#333;color:#fff;padding:10px;z-index:10}
+#covered{position:fixed;bottom:40px;left:30px}
+.menu{position:relative;display:inline-block;margin-top:20px}.menu .items{display:none;position:absolute;background:#eee;padding:6px}.menu:hover .items{display:block}
+.fake-check input{position:absolute;opacity:0;width:0;height:0}.fake-check span{display:inline-block;width:18px;height:18px;border:2px solid #333;vertical-align:middle}
+.fake-check input:checked + span{background:#2a7}
+#card{display:inline-block;padding:10px;border:1px solid #999;cursor:pointer;margin-top:10px}
+#drag{width:60px;height:60px;background:#d97757;position:absolute;left:400px;top:160px}
+</style></head><body>
+<h1>Buttons</h1>
+<button id="count">Clicked 0 times</button>
+<button id="dbl">Double-click me</button>
+<button id="ctx">Right-click me</button>
+<div id="card">Open card</div>
+<div class="menu"><button>Menu</button><div class="items"><a href="#" id="hidden-item">Secret item</a></div></div>
+<p><label class="fake-check"><input type="checkbox" id="terms"><span></span> I like tests</label></p>
+<p><input id="keys" placeholder="Key log target"></p>
+<div id="drag" title="drag box"></div>
+<p id="log"></p>
+<button id="covered">Covered button</button>
+<div id="banner">We use cookies. <button id="accept">Accept cookies</button></div>
+<script>
+const log = (t) => { document.getElementById('log').textContent = t; };
+let n = 0; const c = document.getElementById('count');
+c.onclick = () => { n++; c.textContent = 'Clicked ' + n + ' times'; };
+document.getElementById('card').onclick = function () { this.textContent = 'Card opened'; };
+document.getElementById('hidden-item').onclick = (e) => { e.preventDefault(); log('menu item chosen'); };
+document.getElementById('accept').onclick = () => document.getElementById('banner').remove();
+document.getElementById('dbl').ondblclick = () => log('double clicked');
+document.getElementById('ctx').oncontextmenu = (e) => { e.preventDefault(); log('context menu'); };
+document.getElementById('covered').onclick = () => log('covered clicked');
+document.getElementById('terms').onchange = (e) => log('terms ' + e.target.checked);
+const keys = [];
+document.getElementById('keys').addEventListener('keydown', (e) => {
+  keys.push((e.ctrlKey ? 'ctrl+' : '') + (e.shiftKey && e.key.length > 1 ? 'shift+' : '') + e.key);
+  log('keys:' + keys.join(','));
+});
+const d = document.getElementById('drag'); let drag = null;
+d.addEventListener('mousedown', (e) => { drag = { x: e.clientX - d.offsetLeft, y: e.clientY - d.offsetTop }; });
+addEventListener('mousemove', (e) => { if (drag) { d.style.left = (e.clientX - drag.x) + 'px'; d.style.top = (e.clientY - drag.y) + 'px'; } });
+addEventListener('mouseup', () => { if (drag) { drag = null; log('dropped at ' + d.offsetLeft + ',' + d.offsetTop); } });
+</script></body></html>

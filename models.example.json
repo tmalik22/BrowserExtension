@@ -1,0 +1,262 @@
+{
+  "$comment": "Copy to models.json and edit. Keys come from .env (apiKeyEnv). provider: anthropic | openai (any OpenAI-compatible endpoint) | mock. Model names for non-Anthropic providers are examples: replace them with models your account/server actually serves.",
+  "default": "claude-opus",
+  "profiles": [
+    {
+      "id": "nanogpt",
+      "label": "NanoGPT (any model: edit \"model\")",
+      "provider": "openai",
+      "model": "qwen/qwen3.8-27b",
+      "baseURL": "https://nano-gpt.com/api/v1",
+      "apiKeyEnv": "NANOGPT_API_KEY",
+      "vision": false,
+      "timeoutMs": 300000
+    },
+    {
+      "id": "nanogpt-deepseek-v4.1-flash-uncensored",
+      "label": "DeepSeek V4.1 Flash Uncensored (NanoGPT)",
+      "provider": "openai",
+      "model": "deepseek/deepseek-v4.1-flash-uncensored",
+      "baseURL": "https://nano-gpt.com/api/v1",
+      "apiKeyEnv": "NANOGPT_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "replayReasoning": true,
+      "keepImages": 3
+    },
+    {
+      "id": "nanogpt-glm-5.3-flash-uncensored",
+      "label": "GLM 5.3 Flash Uncensored (NanoGPT)",
+      "provider": "openai",
+      "model": "z-ai/glm-5.3-flash-uncensored",
+      "baseURL": "https://nano-gpt.com/api/v1",
+      "apiKeyEnv": "NANOGPT_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "keepImages": 3
+    },
+    {
+      "id": "ark-deepseek-v4.1-flash",
+      "label": "DeepSeek V4.1 Flash (Volcano Ark coding plan)",
+      "provider": "openai",
+      "model": "deepseek-v4.1-flash",
+      "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3",
+      "apiKeyEnv": "ARK_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "replayReasoning": true,
+      "keepImages": 3
+    },
+    {
+      "id": "ark-deepseek-v4.1-flash-economy",
+      "label": "DeepSeek V4.1 Flash Economy (Volcano Ark coding plan)",
+      "provider": "openai",
+      "model": "deepseek-v4.1-flash-economy",
+      "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3",
+      "apiKeyEnv": "ARK_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "replayReasoning": true,
+      "keepImages": 3
+    },
+    {
+      "id": "ark-glm-5.3-flash",
+      "label": "GLM 5.3 Flash (Volcano Ark coding plan)",
+      "provider": "openai",
+      "model": "glm-5.3-flash",
+      "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3",
+      "apiKeyEnv": "ARK_API_KEY",
+      "vision": false,
+      "toolSet": "full",
+      "timeoutMs": 300000
+    },
+    {
+      "id": "nim-deepseek-v4.1-flash",
+      "label": "DeepSeek V4.1 Flash (NVIDIA NIM)",
+      "provider": "openai",
+      "model": "deepseek-ai/deepseek-v4.1-flash",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "replayReasoning": true,
+      "keepImages": 3
+    },
+    {
+      "id": "nim-nemotron-3.5-super-vl",
+      "label": "Nemotron 3.5 Super VL (NVIDIA NIM)",
+      "provider": "openai",
+      "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "keepImages": 3
+    },
+    {
+      "id": "nim-minimax-m3.1-flash",
+      "label": "MiniMax M3.1 Flash (NVIDIA NIM)",
+      "provider": "openai",
+      "model": "minimaxai/minimax-m3.1-flash",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "keepImages": 3
+    },
+    {
+      "id": "nim-mistral-large-4",
+      "label": "Mistral Large 4 (NVIDIA NIM)",
+      "provider": "openai",
+      "model": "mistralai/mistral-large-4-1t-a52b",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "keepImages": 3
+    },
+    {
+      "id": "nim-step-5-preview",
+      "label": "Step 5 Preview (NVIDIA NIM)",
+      "provider": "openai",
+      "model": "stepfun-ai/step-5-preview",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "apiKeyEnv": "NVIDIA_API_KEY",
+      "vision": true,
+      "toolSet": "full",
+      "timeoutMs": 300000,
+      "keepImages": 3
+    },
+    {
+      "id": "claude-opus",
+      "label": "Claude Opus 5.5",
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "vision": true,
+      "effort": "medium",
+      "fallbacks": "default"
+    },
+    {
+      "id": "claude-sonnet",
+      "label": "Claude Sonnet 5.5",
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "vision": true,
+      "effort": "medium",
+      "fallbacks": "default"
+    },
+    {
+      "id": "claude-haiku",
+      "label": "Claude Haiku 5.5 (fast, cheap)",
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "vision": true,
+      "effort": "low",
+      "fallbacks": "off"
+    },
+    {
+      "id": "openai",
+      "label": "OpenAI (GPT)",
+      "provider": "openai",
+      "model": "gpt-5",
+      "baseURL": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "vision": true
+    },
+    {
+      "id": "gemini",
+      "label": "Google Gemini",
+      "provider": "openai",
+      "model": "gemini-2.5-pro",
+      "baseURL": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "apiKeyEnv": "GEMINI_API_KEY",
+      "vision": true
+    },
+    {
+      "id": "openrouter",
+      "label": "OpenRouter",
+      "provider": "openai",
+      "model": "openai/gpt-5",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "vision": true,
+      "headers": {
+        "X-Title": "Browser Agent"
+      }
+    },
+    {
+      "id": "groq",
+      "label": "Groq",
+      "provider": "openai",
+      "model": "llama-3.3-70b-versatile",
+      "baseURL": "https://api.groq.com/openai/v1",
+      "apiKeyEnv": "GROQ_API_KEY",
+      "vision": false,
+      "toolSet": "compact"
+    },
+    {
+      "id": "ollama",
+      "label": "Ollama (local)",
+      "provider": "openai",
+      "model": "qwen2.5vl:7b",
+      "baseURL": "http://127.0.0.1:11434/v1",
+      "apiKey": "ollama",
+      "vision": true,
+      "toolSet": "compact",
+      "keepImages": 1,
+      "timeoutMs": 600000
+    },
+    {
+      "id": "ollama-json",
+      "label": "Ollama (local, no tool calling)",
+      "provider": "openai",
+      "model": "llama3.2",
+      "baseURL": "http://127.0.0.1:11434/v1",
+      "apiKey": "ollama",
+      "vision": false,
+      "toolMode": "json",
+      "toolSet": "compact",
+      "stream": false,
+      "timeoutMs": 600000
+    },
+    {
+      "id": "lmstudio",
+      "label": "LM Studio (local)",
+      "provider": "openai",
+      "model": "local-model",
+      "baseURL": "http://127.0.0.1:1234/v1",
+      "apiKey": "lm-studio",
+      "vision": false,
+      "toolSet": "compact",
+      "timeoutMs": 600000
+    },
+    {
+      "id": "custom",
+      "label": "Custom OpenAI-compatible (vLLM / llama.cpp / other)",
+      "provider": "openai",
+      "model": "your-model",
+      "baseURL": "http://127.0.0.1:8000/v1",
+      "apiKey": "none",
+      "vision": false
+    },
+    {
+      "id": "mock",
+      "label": "Mock (no model, for testing)",
+      "provider": "mock",
+      "model": "mock",
+      "vision": false,
+      "script": "echo"
+    }
+  ]
+}
