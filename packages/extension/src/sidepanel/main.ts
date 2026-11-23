@@ -68,6 +68,9 @@ const messages = $('messages');
 const input = $<HTMLTextAreaElement>('input');
 const modelSel = $<HTMLSelectElement>('model');
 $('about-version').textContent = `v${chrome.runtime.getManifest().version}`;
+// The Chrome Web Store build doesn't include javascript_exec: never show its switch, not even before
+// settings load.
+if (__BA_STORE__) $('set-js').closest('label')?.classList.add('hidden');
 const picker = initModelPicker({
   select: modelSel,
   profiles: () => chatProfiles(),

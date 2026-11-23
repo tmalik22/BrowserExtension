@@ -141,6 +141,14 @@ export interface UrlPolicy {
 }
 
 /** Returns an error message when the URL may not be visited, else null. */
+/** Browser-internal, extension and web-store pages, which extensions can't (and the agent mustn't) read or control. */
+export function isRestrictedUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return (
+    /^(chrome|edge|brave|opera|vivaldi|about|devtools|chrome-extension|chrome-search|view-source|chrome-untrusted|moz-extension):/i.test(url) && url !== 'about:blank'
+  ) || /^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com)/i.test(url);
+}
+
 export function checkUrlPolicy(url: string, policy: UrlPolicy): string | null {
   let u: URL;
   try {

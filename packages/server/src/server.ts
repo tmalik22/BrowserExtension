@@ -29,7 +29,7 @@ import { ModelCatalog, mergeCatalog, type CatalogProvider } from './catalog.ts';
 import { detectLocalModels, mergeDetected, type LocalServer } from './local-models.ts';
 import { PairedClients, clientProof, newNonce, safeEqualHex, serverProof, startPairingExchange, whoamiProof, type PairPrompter } from './pairing.ts';
 
-export const SERVER_VERSION = '0.3.1';
+export const SERVER_VERSION = '0.3.2';
 const RECONNECT_GRACE_MS = 20_000;
 const EVENT_BUFFER = 2000;
 

@@ -2,7 +2,7 @@
  * chrome.debugger (CDP 1.3) attachment per tab, event routing, network-idle tracking, and
  * console/network buffers for read_console / read_network.
  */
-import { checkUrlPolicy, sanitizeUrl, truncate, type UrlPolicy } from '@ba/shared';
+import { checkUrlPolicy, isRestrictedUrl, sanitizeUrl, truncate, type UrlPolicy } from '@ba/shared';
 
 /** URL policy per agent tab, enforced on document requests (incl. redirects) while running. */
 const tabPolicy = new Map<number, UrlPolicy>();
@@ -53,12 +53,7 @@ export function onDetach(fn: (tabId: number, reason: string) => void): void {
 }
 
 /** Pages extensions may not control. */
-export function isRestrictedUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  return (
-    /^(chrome|edge|brave|opera|vivaldi|about|devtools|chrome-extension|chrome-search|view-source|chrome-untrusted):/i.test(url) && url !== 'about:blank'
-  ) || /^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com)/i.test(url);
-}
+export { isRestrictedUrl } from '@ba/shared';
 
 export async function attach(tabId: number): Promise<void> {
   const s = state(tabId);

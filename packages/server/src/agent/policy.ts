@@ -12,6 +12,7 @@ import {
   READ_ONLY_MEMBERS,
   TAB_MEMBERS,
   checkUrlPolicy,
+  isRestrictedUrl,
   hostMatches,
   parseNavigateUrl,
   siteKey,
@@ -207,6 +208,12 @@ export function evaluate(
   if (member === 'file_upload') {
     const err = checkUploadPaths(input.paths, settings.uploadDir);
     if (err) return { kind: 'deny', message: err };
+  }
+
+  // Browser-internal and extension pages (including this extension's own panel) are off limits:
+  // refuse outright rather than asking the user to approve something that must never happen.
+  if (desc?.url && member !== 'wait' && isRestrictedUrl(desc.url)) {
+    return { kind: 'deny', message: `Error: that tab shows a browser-internal or extension page (${desc.url.slice(0, 80)}), which the agent can't read or control. Use navigate to open a website.` };
   }
 
   if (!needsDescription(member)) {

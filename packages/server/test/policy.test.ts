@@ -261,3 +261,21 @@ describe('security sweep round 2', () => {
     expect(evaluate('get_page_text', {}, d, S({ permissionMode: 'ask' }), fresh())).toMatchObject({ kind: 'ask', category: 'uninspectable' });
   });
 });
+
+describe('browser-internal and extension pages', () => {
+  const at = (url: string): ActionDescription => ({ tabId: 't1', url, host: '' });
+  it('refuses to read or act on them in every mode, without asking', () => {
+    for (const url of ['chrome-extension://abcdefghijklmnop/sidepanel.html', 'chrome://settings/passwords', 'devtools://devtools/x', 'https://chromewebstore.google.com/detail/x']) {
+      for (const mode of ['ask', 'auto', 'yolo'] as const) {
+        for (const m of ['read_page', 'get_page_text', 'screenshot', 'left_click', 'type']) {
+          const r = evaluate(m, { text: 'x' }, at(url), S({ permissionMode: mode }), fresh());
+          expect(r.kind, `${m} ${mode} ${url}`).toBe('deny');
+        }
+      }
+    }
+  });
+  it('still allows about:blank and ordinary sites, and waiting anywhere', () => {
+    expect(evaluate('read_page', {}, at('about:blank'), S({ permissionMode: 'auto' }), fresh()).kind).toBe('allow');
+    expect(evaluate('wait', {}, at('chrome://newtab/'), S({ permissionMode: 'ask' }), fresh()).kind).toBe('allow');
+  });
+});
