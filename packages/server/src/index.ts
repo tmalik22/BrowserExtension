@@ -72,6 +72,8 @@ async function main(): Promise<void> {
     // Models installed in Ollama / LM Studio, and live model lists from providers you have keys for.
     detectLocal: process.env.AGENT_DETECT_LOCAL !== '0',
     catalog: process.env.AGENT_MODEL_LISTS !== '0',
+    // AGENT_KEEP_DAYS=30: delete saved chats (and their screenshots) not touched for 30 days.
+    keepDays: Number(process.env.AGENT_KEEP_DAYS) || undefined,
   });
   const port = await listenReplacingOld(server, config);
   await server.refreshModels({ catalog: false }); // local detection is quick; provider lists load below
@@ -95,6 +97,7 @@ async function main(): Promise<void> {
     ...(config.profiles.some((p) => p.detected) ? [] : ['    Tip: install Ollama or LM Studio and your local models appear here automatically.']),
     '',
     `  Transcripts: ${config.dataDir}`,
+    ...(server.prunedChats ? [`  Deleted ${server.prunedChats} saved chat${server.prunedChats === 1 ? '' : 's'} older than ${process.env.AGENT_KEEP_DAYS} days (AGENT_KEEP_DAYS).`] : []),
     process.env.BA_GPU === '0' ? '  GPU monitor: off (BA_GPU=0)' : '  GPU monitor: on (alerts print here and in the side panel)',
     '',
     '  Keep this window open while you use the agent. To restart, just run Start Browser Agent again.',

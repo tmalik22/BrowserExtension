@@ -17,7 +17,10 @@ describe('policy.evaluate', () => {
     const st = fresh();
     st.sessionSites.add('shop.example.com');
     expect(evaluate('navigate', { url: 'https://shop.example.com/x' }, undefined, S(), st).kind).toBe('allow');
-    expect(evaluate('navigate', { url: 'https://a.example.com/' }, undefined, S({ allowedSites: ['example.com'] }), fresh()).kind).toBe('allow');
+    expect(evaluate('navigate', { url: 'https://www.example.com/' }, undefined, S({ allowedSites: ['example.com'] }), fresh()).kind).toBe('allow');
+    // An approved site does not cover its other subdomains unless the entry says so with "*.".
+    expect(evaluate('navigate', { url: 'https://a.example.com/' }, undefined, S({ allowedSites: ['example.com'] }), fresh()).kind).toBe('ask');
+    expect(evaluate('navigate', { url: 'https://a.example.com/' }, undefined, S({ allowedSites: ['*.example.com'] }), fresh()).kind).toBe('allow');
   });
   it('allows any site in auto mode but still blocks policy violations', () => {
     expect(evaluate('navigate', { url: 'https://x.org' }, undefined, S({ permissionMode: 'auto' }), fresh()).kind).toBe('allow');

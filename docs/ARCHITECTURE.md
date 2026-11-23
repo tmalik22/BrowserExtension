@@ -24,7 +24,7 @@ harness from scratch.
     blocks on recent Anthropic models). Anthropic assistant turns are replayed verbatim (signatures included).
   - The member set is fixed at session start (changing tools mid-session breaks both).
   - Stop takes effect immediately, including during a long-running action.
-- **CAPTCHA helper** (`session.ts`): when a navigation (or a finished turn) leaves a Cloudflare/Turnstile-style challenge on screen, a configured helper profile gets a fresh screenshot and a 6-action budget to solve only the challenge. It runs in an isolated conversation; the main model receives a short note, re-reads the page and continues. Detection is a DOM/URL probe in the extension, not model guesswork.
+- **CAPTCHA helper** (`session.ts`): when a navigation (or a finished turn) leaves a Cloudflare/Turnstile-style challenge on screen, a configured helper profile solves only the challenge. There are two paths. A CaptchaKraken profile (`captchaProtocol: "kraken"`, `solveCaptchaKraken`) runs up to 10 rounds of observe → one JSON plan from the model → the extension applies it. Any other vision model gets a fresh screenshot, a small subset of the tools and a 6-step budget (`CAPTCHA_MAX_STEPS`). Either way it runs in an isolated conversation; the main model receives a short note, re-reads the page and continues. Detection is a DOM/URL probe in the extension, not model guesswork. The Chrome Web Store build has neither path: the helper is in the GitHub build only.
 - **Policy** (`agent/policy.ts`) runs before every call, independent of the model. The extension
   first `describe`s what the call would touch (element role/name, form context, sensitivity,
   page URL); the policy then allows, denies, or asks the user. What it asks about is split into
@@ -80,8 +80,11 @@ harness from scratch.
     stable until the tab navigates, persisted in `storage.session` across service-worker restarts.
   - `screenshot.ts` — capture, resize to ≤1568 px long edge / ≤1.15 MP (fits every model's image
     limits, including the stricter limit once a request holds >20 images), remember the scale.
-  - `sessions.ts` — tab group per task, page-opened tabs join with `tab_opened`, active-tab
-    tracking, `browser_state` blocks, downloads (`download_started/completed/failed`).
+  - `sessions.ts` — tab group per task, tabs that the agent's own action just opened join with
+    `tab_opened` (tabs the user opens, and anything opened after the task finished, do not),
+    active-tab tracking, `browser_state` blocks, downloads (`download_started/completed/failed`).
+    The debugger is attached to a task's tabs only while the agent is working: it detaches when
+    the task goes idle and re-attaches on the next message.
 - **Content script** (`content/`, every frame, isolated world)
   - `outline.ts` — the `read_page` tree: ARIA roles (explicit and implicit), accessible names
     (`aria-labelledby`, `aria-label`, labels, alt, title, placeholder, text), states and values
@@ -97,8 +100,8 @@ harness from scratch.
 
 ## Trade-offs and limits
 
-- `chrome.debugger` shows a browser-wide infobar; there's no way around it for an extension
-  (Comet avoids it by being a browser fork).
+- `chrome.debugger` shows a browser-wide infobar while a task is working; there's no way around
+  it for an extension (Comet avoids it by being a browser fork).
 - `find` is lexical; it does well on labelled UIs but can miss icon-only buttons. `read_page`
   and screenshots cover those.
 - `file_upload` supports paths in the server's upload folder (same machine), not `document_ids`.

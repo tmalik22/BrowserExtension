@@ -17,9 +17,17 @@ const watch = process.argv.includes('--watch');
 const store = process.argv.includes('--store');
 const dist = path.join(here, store ? 'dist-store' : 'dist');
 
-/** Copy static/ (manifest, side panel, icons) into the output folder. */
+/**
+ * Copy static/ (manifest, side panel, icons) into the output folder. In the store build, markup
+ * between <!-- store-omit --> and <!-- /store-omit --> (settings for features that build doesn't
+ * have) is left out.
+ */
 function copyStatic(): void {
   fs.cpSync(path.join(here, 'static'), dist, { recursive: true });
+  if (!store) return;
+  const panel = path.join(dist, 'sidepanel.html');
+  const html = fs.readFileSync(panel, 'utf8');
+  fs.writeFileSync(panel, html.replace(/[ \t]*<!-- store-omit -->[\s\S]*?<!-- \/store-omit -->[ \t]*\r?\n?/g, ''));
 }
 
 const common: esbuild.BuildOptions = {
@@ -29,6 +37,9 @@ const common: esbuild.BuildOptions = {
   logLevel: 'info',
   legalComments: 'none',
   define: { __BA_STORE__: store ? 'true' : 'false' },
+  // Store build: fold the constant and drop the branches it switches off, so features that build
+  // doesn't have leave nothing behind. Names and layout stay readable (this is not minification).
+  minifySyntax: store,
 };
 
 async function main(): Promise<void> {

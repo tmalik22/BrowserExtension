@@ -3,8 +3,10 @@
  * settings/token under data/.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { DEFAULT_CONFIRM, DEFAULT_SETTINGS, registerSecret, type ApiKeyInfo, type ConfirmCategory, type ConfirmSettings, type PolicySettings, type ProfileInfo } from '@ba/shared';
@@ -249,10 +251,37 @@ export function loadOrCreateToken(dataDir: string): string {
   return t;
 }
 
+/**
+ * Make the data folder (API keys, pairing secrets, saved chats and their screenshots) private to
+ * the user running the server. On Windows the file modes used elsewhere do nothing, and a folder
+ * outside the user profile is readable by every account on the machine unless its access list
+ * says otherwise: give it the access list a user-profile folder has (the user, SYSTEM and
+ * Administrators), which everything inside it then inherits. Best effort: a failure leaves the
+ * folder as it was.
+ */
+export function protectDataDir(dir: string): void {
+  try {
+    if (process.platform !== 'win32') {
+      fs.chmodSync(dir, 0o700);
+      return;
+    }
+    const icacls = (...args: string[]) => execFileSync('icacls', [dir, ...args], { encoding: 'utf8', windowsHide: true, timeout: 15_000, stdio: ['ignore', 'pipe', 'ignore'] });
+    // Already done on an earlier start: nothing on the folder is inherited from its parent.
+    if (!/\(I\)/.test(icacls())) return;
+    const user = `${process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\` : ''}${os.userInfo().username}`;
+    // Add the explicit entries first, so the folder stays usable if the second step fails.
+    icacls('/grant:r', `${user}:(OI)(CI)F`, '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F');
+    icacls('/inheritance:r');
+  } catch {
+    /* best effort */
+  }
+}
+
 export function loadConfig(overrides: Partial<ServerConfig> = {}): ServerConfig {
   loadEnv();
   const dataDir = overrides.dataDir ?? process.env.AGENT_DATA_DIR ?? path.join(ROOT, 'data');
   fs.mkdirSync(dataDir, { recursive: true });
+  protectDataDir(dataDir);
   const { profiles, defaultProfileId, modelsFile } = overrides.profiles
     ? { profiles: overrides.profiles, defaultProfileId: overrides.defaultProfileId ?? overrides.profiles[0].id, modelsFile: undefined }
     : loadProfiles(process.env.AGENT_MODELS_FILE);

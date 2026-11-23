@@ -66,12 +66,25 @@ export interface OutlineResponse {
 const MAX_NAME = 150;
 const MAX_TEXT = 300;
 
+/** Quote a page-supplied value for one outline line: no line breaks or control characters. */
 function q(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return s
+    .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
 }
 
 function trunc(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+/**
+ * A page-supplied attribute that is written into the outline unquoted: only its well-formed
+ * values are used, so a page can't smuggle text (or new lines) into what the model reads.
+ */
+function token(value: string | null, allowed: RegExp): string | null {
+  const v = (value ?? '').trim().toLowerCase();
+  return allowed.test(v) ? v : null;
 }
 
 export function elementProps(el: Element, role: string): string {
@@ -79,7 +92,7 @@ export function elementProps(el: Element, role: string): string {
   const input = el as HTMLInputElement;
   const tag = el.tagName;
   if (role === 'heading') {
-    const lvl = el.getAttribute('aria-level') ?? (/^H[1-6]$/.test(tag) ? tag[1] : null);
+    const lvl = token(el.getAttribute('aria-level'), /^[0-9]{1,2}$/) ?? (/^H[1-6]$/.test(tag) ? tag[1] : null);
     if (lvl) p.push(`level=${lvl}`);
   }
   if (role === 'link') {
@@ -87,7 +100,7 @@ export function elementProps(el: Element, role: string): string {
     if (href && !href.startsWith('javascript:')) p.push(`href="${q(trunc(href, 120))}"`);
   }
   if (tag === 'INPUT') {
-    const t = (input.getAttribute('type') || 'text').toLowerCase();
+    const t = token(input.getAttribute('type'), /^[a-z-]{1,20}$/) ?? 'text';
     if (!['text', 'checkbox', 'radio', 'submit', 'button'].includes(t)) p.push(`type="${t}"`);
   }
   const sensitive = isSensitiveField(el.getAttribute('autocomplete') ?? undefined, accessibleNameSafe(el, role), input.type);
@@ -104,11 +117,13 @@ export function elementProps(el: Element, role: string): string {
     const sel = el instanceof HTMLOptionElement ? el.selected : el.getAttribute('aria-selected') === 'true';
     if (sel) p.push('selected');
   }
-  const exp = el.getAttribute('aria-expanded');
-  if (exp !== null) p.push(`expanded=${exp}`);
+  const exp = token(el.getAttribute('aria-expanded'), /^(true|false)$/);
+  if (exp) p.push(`expanded=${exp}`);
   else if (tag === 'SUMMARY') p.push(`expanded=${(el.parentElement as HTMLDetailsElement | null)?.open ? 'true' : 'false'}`);
-  if (el.getAttribute('aria-pressed') !== null) p.push(`pressed=${el.getAttribute('aria-pressed')}`);
-  if (el.getAttribute('aria-haspopup') && el.getAttribute('aria-haspopup') !== 'false') p.push(`haspopup=${el.getAttribute('aria-haspopup')}`);
+  const pressed = token(el.getAttribute('aria-pressed'), /^(true|false|mixed)$/);
+  if (pressed) p.push(`pressed=${pressed}`);
+  const popup = token(el.getAttribute('aria-haspopup'), /^(true|menu|listbox|tree|grid|dialog)$/);
+  if (popup) p.push(`haspopup=${popup}`);
   if ((el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') p.push('disabled');
   if ((input as HTMLInputElement).required || el.getAttribute('aria-required') === 'true') p.push('required');
   if ((input as HTMLInputElement).readOnly || el.getAttribute('aria-readonly') === 'true') p.push('readonly');

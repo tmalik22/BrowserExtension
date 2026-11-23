@@ -2,7 +2,8 @@ Browser Agent server
 ====================
 
 This is the local server for the Browser Agent Chrome extension. It runs the AI model loop on
-your computer, so your API keys and the pages you browse stay here.
+your computer. Your API keys are stored here, and keys and page content are sent only to the
+model provider you choose (nowhere else, and nowhere at all with a local model).
 
 1. Install Node.js 20 or newer from https://nodejs.org/ (skip if you already have it).
 2. Start the server:

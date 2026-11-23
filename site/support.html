@@ -42,11 +42,11 @@
     </details>
     <details>
       <summary>How do I use a cloud model?</summary>
-      <p>Open the side panel, then ⚙ Settings → API keys, and paste your key. It's stored by the server on your computer and never sent back to the browser.</p>
+      <p>Open the side panel, then ⚙ Settings → API keys, and paste your key. The side panel passes it to the server on your computer, which saves it there and sends it to that provider with each request. The extension doesn't keep it, and the full key is never sent back to the browser (only its last 4 characters, as a hint).</p>
     </details>
     <details>
       <summary>Why does Chrome say it's "debugging this browser"?</summary>
-      <p>Chrome shows that bar for any extension that uses its DevTools interface, which Browser Agent uses to click and type reliably. It disappears when the task ends. Clicking <b>Cancel</b> on it stops the task.</p>
+      <p>Chrome shows that bar for any extension that uses its DevTools interface, which Browser Agent uses to click and type reliably. It's only there while the agent is working: it disappears when the task finishes or goes idle, and comes back when you send the next message. Clicking <b>Cancel</b> on it stops the task.</p>
     </details>
     <details>
       <summary>The agent asks for approval a lot</summary>

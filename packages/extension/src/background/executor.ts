@@ -4,12 +4,13 @@
  */
 import {
   TAB_MEMBERS,
-  checkUrlPolicy,
   hostOf,
   isChallengeUrl,
   parseNavigateUrl,
   sanitizeTitle,
   sanitizeUrl,
+  siteApproved,
+  siteKey,
   truncate,
   type ActionDescription,
   type BrowserMember,
@@ -20,17 +21,20 @@ import {
   type ResultBlock,
   type ToolResult,
 } from '@ba/shared';
-import { CdpError, attach, drainConsole, drainNetwork, enableConsole, iframeRect, isRestrictedUrl, openDialog, send } from './cdp.ts';
+import { CdpError, attach, checkTabUrl, drainConsole, drainNetwork, enableConsole, iframeRect, isRestrictedUrl, openDialog, send } from './cdp.ts';
 import { StaleRefError, frameCall, frameOffset, listFrames, lookupRef, probeFrame, refCall, refFor, type FrameInfo } from './frames.ts';
 import { click, drag, mouseDown, mouseMove, mouseUp, parseKeySequence, parseModifiers, pressChord, typeText, wheel, type Button } from './input.ts';
 import { captchaCrop, screenshot, toCss, viewport, zoom, imageScale } from './screenshot.ts';
 import {
   addTab,
   getSession,
+  inputBegan,
+  inputEnded,
   overlay,
   parseTabId,
   rememberPolicy,
   resolveTab,
+  sessionForTab,
   setActiveTab,
   stateBlock,
   tabIdStr,
@@ -95,10 +99,15 @@ export async function execute(p: ExecuteParams): Promise<ToolResult> {
     rememberPolicy(s, policy);
     // Every member (reads included) respects the URL policy: a page may have opened or redirected
     // this tab somewhere the agent may not go.
-    const tabUrl = tab.pendingUrl || tab.url || '';
-    if (member !== 'navigate' && /^https?:/.test(tabUrl)) {
-      const e = checkUrlPolicy(tabUrl, policy);
-      if (e) throw err(`${tabIdStr(tabId)} is on ${hostOf(tabUrl)}, which is not allowed (${e.replace(/^Error: /, '')}). Navigate elsewhere or close the tab.`);
+    const refuseTab = (url: string) => {
+      const e = /^https?:/.test(url) ? checkTabUrl(url, policy) : null;
+      if (e) throw err(`${tabIdStr(tabId)} is on ${hostOf(url)}, which is not allowed (${e.replace(/^Error: /, '')}). Navigate elsewhere or close the tab.`);
+    };
+    // Both the page that is showing and the one being loaded count: a read sent while the tab is
+    // on its way elsewhere is still answered by the page that is showing.
+    if (member !== 'navigate') {
+      refuseTab(tab.url ?? '');
+      refuseTab(tab.pendingUrl ?? '');
     }
     // The action was approved for a specific document: refuse if the page changed meanwhile.
     if (p.expectDocKey && member !== 'navigate' && (ACTING.has(member) || PAGE_READS.has(member))) {
@@ -106,14 +115,26 @@ export async function execute(p: ExecuteParams): Promise<ToolResult> {
       if (now && now !== p.expectDocKey) throw err('the page changed (navigated or reloaded) after this action was checked. Observe the page again before acting.');
     }
     const ctx: Ctx = { s, tabId, p, input };
-    if (s.lockUserInput && ACTING.has(member)) await frameCall(tabId, 0, { type: 'ba:lock_suspend', value: true }, 2000).catch(() => {});
     let out: ResultBlock[];
+    // Tabs opened while (or just after) the agent acts are its own; see sessions.ts.
+    const acting = ACTING.has(member);
+    // The agent's own input goes through its overlay: the input lock, and the "working" pill
+    // (which would otherwise swallow clicks near the top of the page, or press its own Stop).
+    if (acting) await frameCall(tabId, 0, { type: 'ba:lock_suspend', value: true }, 2000).catch(() => {});
+    if (acting) inputBegan(s);
     try {
-      out = await run(ctx, member);
+      try {
+        out = await run(ctx, member);
+      } finally {
+        if (acting) await frameCall(tabId, 0, { type: 'ba:lock_suspend', value: false }, 2000).catch(() => {});
+      }
+      // A page can turn out, once its response arrives, to be served from a private address:
+      // never hand such a page's content back.
+      if (PAGE_READS.has(member)) refuseTab((await chrome.tabs.get(tabId).catch(() => undefined))?.url ?? '');
+      return await finish(ctx, member, out);
     } finally {
-      if (s.lockUserInput && ACTING.has(member)) await frameCall(tabId, 0, { type: 'ba:lock_suspend', value: false }, 2000).catch(() => {});
+      if (acting) inputEnded(s);
     }
-    return await finish(ctx, member, out);
   } catch (e) {
     return errorResult(e);
   }
@@ -226,6 +247,9 @@ export async function captchaObserve(p: { sessionId: string; tab_id?: string }):
     region = { x: 0, y: 0, w: vp.width, h: vp.height };
     located = false;
   }
+  // An iframe's src attribute is the page's claim; the frame's committed URL is the fact. A
+  // "challenge" iframe that no frame backs has been pointed somewhere else.
+  if (located && !challengeFrame) located = false;
   if (region.w > CAPTCHA_MAX.w || region.h > CAPTCHA_MAX.h) located = false;
   region = {
     x: Math.max(0, Math.min(vp.width - 1, region.x)),
@@ -271,7 +295,7 @@ export async function captchaAction(p: {
   const tabUrl = tab.pendingUrl || tab.url || '';
   if (!p.settings) throw err('no URL policy was supplied for the CAPTCHA action.');
   if (/^https?:/.test(tabUrl)) {
-    const e = checkUrlPolicy(tabUrl, { allowPrivateNetworks: p.settings.allowPrivateNetworks, blockedSites: p.settings.blockedSites });
+    const e = checkTabUrl(tabUrl, { allowPrivateNetworks: p.settings.allowPrivateNetworks, blockedSites: p.settings.blockedSites });
     if (e) throw err(`${hostOf(tabUrl)} is not allowed (${e.replace(/^Error: /, '')}).`);
   }
   const plan = p.plan;
@@ -282,9 +306,48 @@ export async function captchaAction(p: {
   const center = { x: obs.region.x + obs.region.w / 2, y: obs.region.y + obs.region.h / 2 };
   // Every point must land on the challenge iframe itself (not something the page laid over it).
   const onChallenge = async (q: { x: number; y: number }) => {
-    const r = await frameCall<{ ok: boolean }>(tabId, 0, { type: 'ba:captcha_hit', x: q.x, y: q.y }, 3000).catch(() => null);
-    if (!r?.result?.ok) throw err('that point is not on the challenge widget; refusing to click there.');
+    const r = await frameCall<{ ok: boolean; iframeId?: number }>(tabId, 0, { type: 'ba:captcha_hit', x: q.x, y: q.y }, 3000).catch(() => null);
+    const hit = r?.result;
+    if (!hit?.ok || hit.iframeId === undefined || !(await isChallengeFrame(tabId, hit.iframeId))) {
+      throw err('that point is not on the challenge widget; refusing to click there.');
+    }
   };
+  let message = '';
+  inputBegan(s);
+  await frameCall(tabId, 0, { type: 'ba:lock_suspend', value: true }, 2000).catch(() => {});
+  try {
+    message = await applyCaptchaPlan(tabId, plan, obs, pt, center, onChallenge);
+  } finally {
+    await frameCall(tabId, 0, { type: 'ba:lock_suspend', value: false }, 2000).catch(() => {});
+    inputEnded(s);
+  }
+  await settle(tabId, { maxMs: 1500 });
+  captchaObs.delete(tabId);
+  return { ok: true, message };
+}
+
+/**
+ * Is the top-frame <iframe> element with this id showing a challenge provider's page right now?
+ * The element's src attribute doesn't say: a page can point the frame elsewhere and leave src as
+ * it was. So ask each frame that really is on a provider's URL which element hosts it.
+ */
+async function isChallengeFrame(tabId: number, iframeId: number): Promise<boolean> {
+  const frames = await listFrames(tabId).catch(() => []);
+  for (const f of frames.filter((x) => x.parentFrameId === 0 && isChallengeUrl(x.url))) {
+    const hit = await probeFrame(tabId, f.frameId, 1500).catch(() => null);
+    if (hit && hit.parentFrameId === 0 && hit.iframeId === iframeId) return true;
+  }
+  return false;
+}
+
+async function applyCaptchaPlan(
+  tabId: number,
+  plan: CaptchaActionPlan,
+  obs: CaptchaObservation,
+  pt: (x: number, y: number) => { x: number; y: number },
+  center: { x: number; y: number },
+  onChallenge: (q: { x: number; y: number }) => Promise<void>,
+): Promise<string> {
   let message = '';
   if (plan.action === 'click') {
     const points = plan.points.filter((q) => Array.isArray(q) && q.length === 2).map(([x, y]) => pt(Number(x), Number(y)));
@@ -325,9 +388,7 @@ export async function captchaAction(p: {
   } else {
     throw err('unknown captcha action plan.');
   }
-  await settle(tabId, { maxMs: 1500 });
-  captchaObs.delete(tabId);
-  return { ok: true, message };
+  return message;
 }
 
 function storeUnavailable(member: string): never {
@@ -371,13 +432,18 @@ function dialogNote(tabId: number): string {
   return `A JavaScript ${d.type} dialog opened: "${truncate(d.message, 300)}". Press Enter to accept or Escape to dismiss it${d.type === 'prompt' ? ' (type text first to fill in the prompt)' : ''}; the page is blocked until then.`;
 }
 
-/** Auto-accept plain alerts and beforeunload prompts so they don't wedge the session. */
+/**
+ * Auto-accept plain alerts, and the "Leave site?" (beforeunload) prompt when it is the agent's
+ * own action that is leaving the page, so they don't wedge the session: nothing else can run in
+ * the tab while one is open. A "Leave site?" prompt the agent did not cause is left for the user.
+ */
 export function onDialogOpened(tabId: number, params: { type: string; message: string }): void {
-  if (params.type === 'alert') {
+  const leaving = params.type === 'beforeunload' && (sessionForTab(tabId)?.inputInFlight ?? 0) > 0;
+  if (params.type === 'alert' || leaving) {
     setTimeout(() => {
       send(tabId, 'Page.handleJavaScriptDialog', { accept: true }).catch(() => {});
     }, 50);
-    alerts.set(tabId, [...(alerts.get(tabId) ?? []), params.message]);
+    if (params.type === 'alert') alerts.set(tabId, [...(alerts.get(tabId) ?? []), params.message]);
   }
 }
 const alerts = new Map<number, string[]>();
@@ -582,7 +648,16 @@ async function resolveTarget(ctx: Ctx, target: any, allow: { ref: boolean; coord
     const ref = String(target.ref);
     const { result, target: t } = await refCall<{ x?: number; y?: number; unclickable?: string; description: string }>(ctx.tabId, ref, { type: 'ba:resolve', scroll: true });
     const off = t.frameId === 0 ? { x: 0, y: 0 } : await frameOffset(ctx.tabId, t.frameId);
-    return { x: (result.x ?? 0) + off.x, y: (result.y ?? 0) + off.y, label: `element ${ref} (${result.description})`, ref, unclickable: result.unclickable };
+    const at = { x: (result.x ?? 0) + off.x, y: (result.y ?? 0) + off.y };
+    let unclickable = result.unclickable;
+    if (t.frameId !== 0 && !unclickable && result.x !== undefined) {
+      // The frame only knows what covers the element inside the frame. The page that embeds it
+      // may have put something of its own on top (a sticky bar, a consent banner, another site's
+      // button): the press would land on that, not on the element that was checked.
+      const top = await describeAt(ctx.tabId, at.x, at.y).catch(() => null);
+      if (!top || top.frameId !== t.frameId) unclickable = 'it is covered by something on the page that embeds its frame, or its frame is out of view';
+    }
+    return { ...at, label: `element ${ref} (${result.description})`, ref, unclickable };
   }
   if (kind === 'coordinate') {
     if (!allow.coordinate) throw err('this action needs an element reference target {"type": "ref", "ref": "ref_N"}.');
@@ -755,7 +830,7 @@ async function navigate(ctx: Ctx): Promise<string> {
       throw err(`cannot go ${target.action}: ${(e as Error).message}`);
     }
   } else {
-    const policyErr = checkUrlPolicy(target.url, policy);
+    const policyErr = checkTabUrl(target.url, policy);
     if (policyErr) throw err(policyErr);
     if (restricted) {
       await chrome.tabs.update(tabId, { url: target.url });
@@ -769,10 +844,10 @@ async function navigate(ctx: Ctx): Promise<string> {
   const after = await chrome.tabs.get(tabId);
   const finalUrl = after.url ?? '';
   if (/^https?:/.test(finalUrl)) {
-    const e2 = checkUrlPolicy(finalUrl, policy);
+    const e2 = checkTabUrl(finalUrl, policy);
     if (e2) {
-      await chrome.tabs.update(tabId, { url: 'about:blank' });
-      throw err(`the page redirected to ${hostOf(finalUrl)}, which is not allowed: ${e2.replace(/^Error: /, '')}`);
+      await leavePage(tabId);
+      throw err(`the page ended up on ${hostOf(finalUrl)}, which is not allowed: ${e2.replace(/^Error: /, '')}`);
     }
   }
   if (!isRestrictedUrl(finalUrl)) {
@@ -789,6 +864,16 @@ async function navigate(ctx: Ctx): Promise<string> {
     return `${what} ${shownUrl}${title}, but the browser shows an error page.`;
   }
   return target.kind === 'history' && target.action === 'reload' ? `Reloaded ${shownUrl}${title}.` : `${what} ${shownUrl}${title}.`;
+}
+
+/** Send the tab to a blank page and wait until the page it was on is gone. */
+async function leavePage(tabId: number): Promise<void> {
+  await chrome.tabs.update(tabId, { url: 'about:blank' }).catch(() => {});
+  for (let i = 0; i < 60; i++) {
+    const t = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (!t || t.url === 'about:blank') return;
+    await sleep(50);
+  }
 }
 
 // Tabs ----------------------------------------------------------------------------------------
@@ -818,7 +903,14 @@ async function tabMember(s: AgentSession, member: BrowserMember, input: Record<s
     await chrome.tabs.update(id, { active: true });
     await setActiveTab(s, id);
   } else {
-    await chrome.tabs.remove(id);
+    // Closing can raise "Leave site?": it is the agent's own action (see onDialogOpened).
+    inputBegan(s);
+    try {
+      await chrome.tabs.remove(id);
+      await sleep(150);
+    } finally {
+      inputEnded(s);
+    }
     s.tabs = s.tabs.filter((t) => t !== id);
     if (s.activeTab === id && s.tabs.length) await setActiveTab(s, s.tabs[s.tabs.length - 1]);
   }
@@ -862,14 +954,38 @@ async function childFrameMap(tabId: number, frameId: number, frames: FrameInfo[]
   return map;
 }
 
-/** Frames whose URL the policy forbids are not read (their content never reaches the model). */
-function frameBlocked(frames: FrameInfo[], frameId: number, policy: { allowPrivateNetworks: boolean; blockedSites: string[] }): string | null {
-  const f = frames.find((x) => x.frameId === frameId);
-  if (!f || !/^https?:/.test(f.url)) return null;
-  return checkUrlPolicy(f.url, policy) ? hostOf(f.url) : null;
+interface ReadPolicy {
+  allowPrivateNetworks: boolean;
+  blockedSites: string[];
+  /** Permission mode "ask": the sites the user has approved. Absent in the other modes. */
+  approvedSites?: string[];
 }
 
-let currentPolicy = { allowPrivateNetworks: false, blockedSites: [] as string[] };
+const readPolicy = (ctx: Ctx): ReadPolicy => ({
+  allowPrivateNetworks: ctx.p.settings.allowPrivateNetworks,
+  blockedSites: ctx.p.settings.blockedSites,
+  approvedSites: ctx.p.settings.approvedSites,
+});
+
+/**
+ * Why a frame's content is withheld from the model, or null when it may be read. Frames the URL
+ * policy forbids are never read. In "ask" mode the user approved the page's own site, not the
+ * sites it embeds: a page could otherwise frame another site (where the user is signed in) and
+ * have the agent read out what the page itself is not allowed to see.
+ */
+function frameBlocked(frames: FrameInfo[], frameId: number, policy: ReadPolicy): string | null {
+  const f = frames.find((x) => x.frameId === frameId);
+  if (!f || !/^https?:/.test(f.url)) return null;
+  const host = hostOf(f.url);
+  if (checkTabUrl(f.url, policy)) return `${host} is not allowed by policy`;
+  if (policy.approvedSites && frameId !== 0) {
+    const top = hostOf(frames.find((x) => x.frameId === 0)?.url ?? '');
+    if (siteKey(host) !== siteKey(top) && !siteApproved(host, policy.approvedSites)) return `${host} is another site, which the user has not approved`;
+  }
+  return null;
+}
+
+let currentPolicy: ReadPolicy = { allowPrivateNetworks: false, blockedSites: [] };
 
 async function frameOutline(tabId: number, frameId: number, req: { filter?: string; depth: number; rootId?: number }, base: number, frames: FrameInfo[], out: string[], budget: { chars: number; truncated: boolean }): Promise<void> {
   const { result, docNonce } = await frameCall<{ lines: Line[]; truncated: boolean; stale?: boolean }>(tabId, frameId, { type: 'ba:outline', filter: req.filter, depth: req.depth, rootId: req.rootId }, 20_000);
@@ -889,9 +1005,9 @@ async function frameOutline(tabId: number, frameId: number, req: { filter?: stri
     if (l.iframe && l.id !== undefined) {
       const child = frameMap.get(l.id);
       const remaining = req.depth - (l.depth + 1);
-      const blockedHost = child !== undefined ? frameBlocked(frames, child, currentPolicy) : null;
-      if (blockedHost) {
-        out.push(`${'  '.repeat(base + l.depth + 1)}(frame content withheld: ${blockedHost} is not allowed by policy)`);
+      const withheld = child !== undefined ? frameBlocked(frames, child, currentPolicy) : null;
+      if (withheld) {
+        out.push(`${'  '.repeat(base + l.depth + 1)}(frame content withheld: ${withheld})`);
       } else if (child !== undefined && remaining > 0) {
         try {
           await frameOutline(tabId, child, { filter: req.filter, depth: remaining }, base + l.depth + 1, frames, out, budget);
@@ -905,7 +1021,7 @@ async function frameOutline(tabId: number, frameId: number, req: { filter?: stri
 
 async function readPage(ctx: Ctx): Promise<string> {
   const { tabId, input } = ctx;
-  currentPolicy = { allowPrivateNetworks: ctx.p.settings.allowPrivateNetworks, blockedSites: ctx.p.settings.blockedSites };
+  currentPolicy = readPolicy(ctx);
   const filter = input.filter === 'interactive' || input.filter === 'all' ? input.filter : undefined;
   if (input.filter !== undefined && input.filter !== null && !filter) throw err('filter must be "interactive" or "all" (or omitted).');
   const depth = Math.max(1, Math.round(Number(input.depth ?? 15)) || 15);
@@ -914,7 +1030,8 @@ async function readPage(ctx: Ctx): Promise<string> {
   const budget = { chars: OUTPUT_CAP - 400, truncated: false };
   if (input.ref) {
     const t = await lookupRef(tabId, String(input.ref));
-    if (frameBlocked(frames, t.frameId, currentPolicy)) throw err(`${input.ref} is inside a frame whose site is not allowed by policy.`);
+    const withheld = frameBlocked(frames, t.frameId, currentPolicy);
+    if (withheld) throw err(`${input.ref} is inside a frame whose content is withheld: ${withheld}.`);
     try {
       const probe = await frameCall<{ url: string }>(tabId, t.frameId, { type: 'ba:hello' }, 5000);
       if (probe.docNonce !== t.doc) throw new StaleRefError('stale');
@@ -946,7 +1063,7 @@ async function findMember(ctx: Ctx): Promise<string> {
   const { tabId, input } = ctx;
   const query = String(input.query ?? '').trim();
   if (!query) throw err('find requires a query.');
-  const policy = { allowPrivateNetworks: ctx.p.settings.allowPrivateNetworks, blockedSites: ctx.p.settings.blockedSites };
+  const policy = readPolicy(ctx);
   const frames = await listFrames(tabId);
   const all: { frameId: number; doc: string; m: { id: number; role: string; name: string; props: string; score: number } }[] = [];
   await Promise.all(
@@ -975,9 +1092,10 @@ async function pageText(ctx: Ctx): Promise<string> {
   const top = await frameCall<{ title: string; url: string; text: string; truncated: boolean }>(tabId, 0, { type: 'ba:text', maxChars: PAGE_TEXT_CAP }, 20_000);
   let out = `Title: ${sanitizeTitle(top.result.title)}\nURL: ${sanitizeUrl(top.result.url)}\n\n${top.result.text || '(no visible text)'}`;
   let truncated = top.result.truncated;
-  const policy = { allowPrivateNetworks: ctx.p.settings.allowPrivateNetworks, blockedSites: ctx.p.settings.blockedSites };
+  const policy = readPolicy(ctx);
   const allFrames = await listFrames(tabId);
   const frames = allFrames.filter((f) => f.frameId !== 0 && !frameBlocked(allFrames, f.frameId, policy));
+  const withheld = [...new Set(allFrames.filter((f) => f.frameId !== 0).map((f) => frameBlocked(allFrames, f.frameId, policy)).filter(Boolean))];
   for (const f of frames) {
     if (out.length >= PAGE_TEXT_CAP) {
       truncated = true;
@@ -997,6 +1115,7 @@ async function pageText(ctx: Ctx): Promise<string> {
     truncated = true;
   }
   if (truncated) out += `\n[Text truncated at ${PAGE_TEXT_CAP.toLocaleString('en-US')} characters.]`;
+  if (withheld.length) out += `\n[Embedded frame content withheld: ${withheld.join('; ')}.]`;
   return out;
 }
 

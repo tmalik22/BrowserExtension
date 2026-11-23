@@ -26,6 +26,7 @@ const CSS = `
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #b7f34a; animation: pulse 1.2s infinite; }
 .pill button { all: unset; cursor: pointer; padding: 4px 10px; border-radius: 999px; background: #b7f34a; color: #111827; font-weight: 600; }
 .pill button:hover { background: #a3e635; }
+.pill.through { pointer-events: none; }
 .cursor { position: fixed; z-index: 2147483647; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
   border: 2px solid #84cc16; background: rgba(183,243,74,.3); pointer-events: none; opacity: 0;
   transition: left .18s ease-out, top .18s ease-out, opacity .2s; }
@@ -87,7 +88,10 @@ function blocker(e: Event): void {
   e.preventDefault();
 }
 
-/** CDP input is "trusted" too, so the service worker suspends the lock around its own actions. */
+/**
+ * CDP input is "trusted" too, so the service worker suspends the lock around its own actions.
+ * The pill steps aside for them as well.
+ */
 export function setLockSuspended(v: boolean): void {
   suspended = v;
   apply();
@@ -98,6 +102,8 @@ function apply(): void {
   const show = active && !hiddenForCapture;
   p.frame.classList.toggle('hidden', !show);
   p.pill.classList.toggle('hidden', !show);
+  // While the agent's own input is being delivered, the pill lets it through to the page.
+  p.pill.classList.toggle('through', suspended);
   p.lock.classList.toggle('hidden', !(active && locked && !suspended));
   // display:none (not a fade) so the click indicator is never caught in a screenshot, where the
   // model could mistake it for page content.

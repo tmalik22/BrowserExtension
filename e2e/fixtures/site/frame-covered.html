@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Covered frame</title></head>
+<body style="font-family:sans-serif;margin:0">
+<h1 style="margin:10px">Shop</h1>
+<iframe id="ad" title="Advert" style="position:absolute;left:20px;top:80px;width:320px;height:200px;border:1px solid #999"></iframe>
+<!-- The page's own sticky bar overlaps the lower part of the embedded frame. -->
+<div style="position:fixed;left:0;top:180px;width:420px;height:120px">
+  <button id="order" style="width:100%;height:100%;opacity:.6" onclick="this.textContent='ORDERED'">Place order</button>
+</div>
+<script>
+var other = location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+document.getElementById('ad').src = location.protocol + '//' + other + ':' + location.port + '/frame-covered-inner.html';
+</script></body></html>

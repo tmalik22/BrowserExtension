@@ -798,27 +798,8 @@ function fillSettings(): void {
     return;
   }
   $('settings-msg').textContent = '';
-  const helperSel = $<HTMLSelectElement>('set-captcha-helper');
-  helperSel.replaceChildren(new Option('Off', ''));
-  // CaptchaKraken-style solvers are what the helper is built and tested for; any other vision
-  // model is offered as an experimental fallback.
-  const helpers = state.profiles.filter((p) => p.provider !== 'mock' && p.vision && p.available);
-  const solvers = helpers.filter((p) => p.captchaSolver);
-  const others = helpers.filter((p) => !p.captchaSolver);
-  const addGroup = (label: string, list: typeof helpers) => {
-    if (!list.length) return;
-    const g = document.createElement('optgroup');
-    g.label = label;
-    for (const p of list) g.append(new Option(p.label, p.id));
-    helperSel.append(g);
-  };
-  addGroup('CAPTCHA solver (recommended)', solvers);
-  addGroup('General vision models (experimental)', others);
-  if (s.captchaHelperProfileId && !helpers.some((p) => p.id === s.captchaHelperProfileId)) {
-    helperSel.append(new Option('(saved model is not available right now)', s.captchaHelperProfileId));
-  }
-  $('captcha-solver-missing').classList.toggle('hidden', solvers.length > 0);
-  helperSel.value = s.captchaHelperProfileId ?? '';
+  // The Chrome Web Store build has no CAPTCHA helper (and no setting for one).
+  if (!__BA_STORE__) renderHelperChoice(s);
   $<HTMLSelectElement>('set-mode').value = s.permissionMode;
   $<HTMLTextAreaElement>('set-blocked').value = s.blockedSites.join('\n');
   $<HTMLInputElement>('set-private').checked = s.allowPrivateNetworks;
@@ -850,6 +831,30 @@ function fillSettings(): void {
   }
 }
 
+function renderHelperChoice(s: PolicySettings): void {
+  const helperSel = $<HTMLSelectElement>('set-captcha-helper');
+  helperSel.replaceChildren(new Option('Off', ''));
+  // CaptchaKraken-style solvers are what the helper is built and tested for; any other vision
+  // model is offered as an experimental fallback.
+  const helpers = state.profiles.filter((p) => p.provider !== 'mock' && p.vision && p.available);
+  const solvers = helpers.filter((p) => p.captchaSolver);
+  const others = helpers.filter((p) => !p.captchaSolver);
+  const addGroup = (label: string, list: typeof helpers) => {
+    if (!list.length) return;
+    const g = document.createElement('optgroup');
+    g.label = label;
+    for (const p of list) g.append(new Option(p.label, p.id));
+    helperSel.append(g);
+  };
+  addGroup('CAPTCHA solver (recommended)', solvers);
+  addGroup('General vision models (experimental)', others);
+  if (s.captchaHelperProfileId && !helpers.some((p) => p.id === s.captchaHelperProfileId)) {
+    helperSel.append(new Option('(saved model is not available right now)', s.captchaHelperProfileId));
+  }
+  $('captcha-solver-missing').classList.toggle('hidden', solvers.length > 0);
+  helperSel.value = s.captchaHelperProfileId ?? '';
+}
+
 async function saveSettings(): Promise<void> {
   const patch: Partial<PolicySettings> = {
     permissionMode: $<HTMLSelectElement>('set-mode').value as PolicySettings['permissionMode'],
@@ -859,7 +864,7 @@ async function saveSettings(): Promise<void> {
     autoScreenshot: $<HTMLInputElement>('set-autoshot').checked,
     lockUserInput: $<HTMLInputElement>('set-lock').checked,
     confirm: readConfirmList(),
-    captchaHelperProfileId: $<HTMLSelectElement>('set-captcha-helper').value || undefined,
+    ...(__BA_STORE__ ? {} : { captchaHelperProfileId: $<HTMLSelectElement>('set-captcha-helper').value || undefined }),
     enableOptional: {
       javascript_exec: $<HTMLInputElement>('set-js').checked,
       file_upload: $<HTMLInputElement>('set-upload').checked,

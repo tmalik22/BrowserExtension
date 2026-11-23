@@ -16,10 +16,11 @@ Browser Agent is an open-source browser extension plus a small server that **you
 |---|---|---|
 | **Website content** of tabs the agent works in (page text, an outline of the page, screenshots, URLs and titles) | So the AI model you chose can see the page and carry out your task | Your local Browser Agent server, then the model provider you configured |
 | **Your instructions** typed into the side panel | To tell the agent what to do | Same as above |
-| **Text the agent types** for you (e.g. form fields) | To fill in forms you asked it to | Stays in the page. Password and card fields are masked in logs |
+| **Text the agent types** for you (e.g. form fields) | To fill in forms you asked it to | The model you chose writes this text. It is typed into the page and saved in the chat transcript on your own computer. Text typed into password and card fields is masked there |
+| **API keys** for model providers, and the **pairing secret** | To use the model provider you chose, and to connect the extension to your server | A key you type into the side panel is passed to your local server, which saves it and sends it to that provider with each request. The extension does not keep the key and never gets the full key back, only its last 4 characters as a hint. The pairing secret is kept in Chrome's local extension storage and on your server |
 | **Settings** (permission choices, allowed and blocked sites, server address, pairing secret) | To remember your preferences and connect to your server | Chrome's local extension storage and your server's `data/` folder |
 
-The agent only works in the tabs of the task you started (its own tab group). **It does not read your other tabs** or your browsing history.
+The agent only works in the tabs of the task you started (its own tab group). **It does not read your other tabs** or your browsing history. One thing outside those tabs is reported to the model: downloads that start while a task is running (their address, and whether they finished), including a download you start yourself during that time.
 
 ## Model providers
 
@@ -28,11 +29,11 @@ If you use a **cloud** model (for example Anthropic, OpenAI, Google, OpenRouter 
 ## Storage on your computer
 
 Your server keeps, in its `data/` folder on your machine:
-- your API keys (`keys.json`, readable only by your user account),
+- your API keys (`keys.json`, in plain text; the file is marked private to your user account),
 - settings, the pairing token and paired-browser secrets,
-- task transcripts and screenshots for the chat history.
+- task transcripts and screenshots for the chat history (in `data/sessions`), kept until you delete them.
 
-You can delete this folder at any time. Set `AGENT_TRANSCRIPTS=0` to stop saving transcripts.
+You can delete this folder at any time. Set `AGENT_KEEP_DAYS` to a number of days to have older transcripts deleted when the server starts, or set `AGENT_TRANSCRIPTS=0` to stop saving transcripts.
 
 ## Selling and sharing
 

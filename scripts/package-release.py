@@ -28,7 +28,9 @@ def add(z: zipfile.ZipFile, src: Path, arc: str, executable: bool = False) -> No
     info = zipfile.ZipInfo.from_file(src, arc)
     info.compress_type = zipfile.ZIP_DEFLATED
     # Unix permissions so start.sh is runnable after unzipping on macOS/Linux.
-    info.external_attr = (0o755 if executable else 0o644) << 16
+    # Mark the entry as made on Unix: otherwise (zips built on Windows) unzip tools ignore the mode.
+    info.create_system = 3
+    info.external_attr = (0o100755 if executable else 0o100644) << 16
     z.writestr(info, src.read_bytes())
 
 

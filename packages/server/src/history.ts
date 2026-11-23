@@ -10,6 +10,8 @@ import { isBrowserMember, summarizeCall, truncate, type AgentEvent, type ChatInf
 type Rec = Record<string, any>;
 
 const ID_RE = /^[\w-]{1,80}$/;
+/** Folder names the transcript writer produces: <UTC timestamp>_<session id>. */
+const SAVED_CHAT_DIR = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}_[\w-]{1,80}$/;
 /** Screenshots sent back when replaying a saved chat (the most recent ones). */
 const REPLAY_IMAGES = 6;
 const MAX_CHAIN = 8;
@@ -17,6 +19,8 @@ const MAX_CHAIN = 8;
 export interface SavedChat extends Omit<ChatInfo, 'live' | 'running'> {
   dir: string;
   continuedFrom?: string;
+  /** The browser (extension client id) that started the chat; absent in chats saved before this was recorded. */
+  clientId?: string;
 }
 
 export class ChatHistory {
@@ -80,6 +84,7 @@ export class ChatHistory {
       const lastDone = [...recs].reverse().find((r) => r.kind === 'turn_done' && r.finalText);
       const profiled = [...users].reverse().find((r) => r.profile);
       const from = recs.find((r) => r.kind === 'continued_from')?.sessionId;
+      const owner = recs.find((r) => r.kind === 'session')?.client;
       chat = {
         dir,
         sessionId: base.slice(base.indexOf('_') + 1),
@@ -90,6 +95,7 @@ export class ChatHistory {
         messages: users.length,
         lastReply: lastDone ? truncate(String(lastDone.finalText).replace(/\s+/g, ' ').trim(), 160) : undefined,
         continuedFrom: typeof from === 'string' ? from : undefined,
+        clientId: typeof owner === 'string' && owner ? owner : undefined,
       };
     }
     this.cache.set(dir, { key, chat });
@@ -100,7 +106,7 @@ export class ChatHistory {
    * Saved chats, newest first. A chat that was carried on in a newer chat is folded into it
    * (the newer one shows the whole conversation and keeps the original title).
    */
-  list(limit = 50): SavedChat[] {
+  list(limit = 50, clientId?: string): SavedChat[] {
     let names: string[];
     try {
       names = fs.readdirSync(this.root).sort().reverse();
@@ -110,7 +116,7 @@ export class ChatHistory {
     const chats: SavedChat[] = [];
     for (const n of names.slice(0, Math.max(limit * 3, 60))) {
       const c = this.read(path.join(this.root, n));
-      if (c) chats.push(c);
+      if (c && this.visibleTo(c, clientId)) chats.push(c);
     }
     const byId = new Map(chats.map((c) => [c.sessionId, c]));
     const continued = new Set(chats.map((c) => c.continuedFrom).filter(Boolean));
@@ -119,6 +125,46 @@ export class ChatHistory {
       .map((c) => ({ ...c, title: this.rootTitle(c, byId), startedAt: this.rootStart(c, byId) }))
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, limit);
+  }
+
+  /**
+   * May this browser see the chat? Each paired browser sees its own chats. Chats saved before the
+   * owner was recorded stay visible to all, and so does everything when no browser is given.
+   */
+  visibleTo(c: SavedChat, clientId?: string): boolean {
+    return !clientId || !c.clientId || c.clientId === clientId;
+  }
+
+  /**
+   * Delete saved chats (transcript and screenshots) that were last written more than `days` days
+   * ago. Off unless a positive number of days is given. Only folders this server names and
+   * writes are ever removed. Returns how many were deleted.
+   */
+  prune(days: number | undefined, now = new Date()): number {
+    if (typeof days !== 'number' || !Number.isFinite(days) || days <= 0) return 0;
+    const cutoff = now.getTime() - days * 86_400_000;
+    let names: string[];
+    try {
+      names = fs.readdirSync(this.root);
+    } catch {
+      return 0;
+    }
+    let removed = 0;
+    for (const name of names) {
+      if (!SAVED_CHAT_DIR.test(name)) continue;
+      const dir = path.join(this.root, name);
+      try {
+        if (!fs.statSync(dir).isDirectory()) continue;
+        // Age is the last time anything was added to the chat, not when it began.
+        if (fs.statSync(path.join(dir, 'events.jsonl')).mtimeMs >= cutoff) continue;
+        fs.rmSync(dir, { recursive: true, force: true });
+        this.cache.delete(dir);
+        removed++;
+      } catch {
+        /* not a saved chat, or it can't be removed: leave it */
+      }
+    }
+    return removed;
   }
 
   private chain(c: SavedChat, byId?: Map<string, SavedChat>): SavedChat[] {

@@ -42,11 +42,11 @@
     <p class="sub">Built for people who want an AI browser agent on their own terms.</p>
     <div class="grid">
       <div class="card"><div class="icon">🔌</div><h3>Any model, always current</h3><p>NVIDIA NIM, NanoGPT, OpenRouter, Anthropic, OpenAI, Gemini, Groq and more. Add a key and the provider's full model list appears, kept up to date.</p></div>
-      <div class="card"><div class="icon">🖥️</div><h3>Fully local</h3><p>Ollama, LM Studio, vLLM or llama.cpp on your own GPU. Installed models show up automatically.</p></div>
+      <div class="card"><div class="icon">🖥️</div><h3>Fully local</h3><p>Ollama, LM Studio, vLLM or llama.cpp on your own GPU. Ollama and LM Studio models show up automatically; vLLM and llama.cpp work once added to <code>models.json</code>.</p></div>
       <div class="card"><div class="icon">🔓</div><h3>Unfiltered models OK</h3><p>Uncensored and abliterated models work. Safety comes from the policy engine, not from the model refusing.</p></div>
       <div class="card"><div class="icon">🛑</div><h3>You hold the brakes</h3><p>It asks before purchases, logins, passwords, sending, deleting and more, with 11 separate switches.</p></div>
-      <div class="card"><div class="icon">🧩</div><h3>CAPTCHA helper</h3><p>Optional: a free local CAPTCHA model (CaptchaKraken, about 7 GB of GPU memory) clears Cloudflare, reCAPTCHA or hCaptcha checks so the task continues.</p></div>
-      <div class="card"><div class="icon">🔑</div><h3>Private by design</h3><p>Keys stay on your computer. The extension only talks to your own local server. No telemetry.</p></div>
+      <div class="card"><div class="icon">🧩</div><h3>CAPTCHA helper</h3><p>Optional, GitHub build only: a free local CAPTCHA model (CaptchaKraken, about 7 GB of GPU memory) clears Cloudflare, reCAPTCHA or hCaptcha checks so the task continues.</p></div>
+      <div class="card"><div class="icon">🔑</div><h3>Private by design</h3><p>Keys are saved on your computer and sent only to the model provider you chose. The extension only talks to your own local server. No telemetry.</p></div>
     </div>
   </section>
 
@@ -63,13 +63,13 @@
         </ul>
         <p class="sub">All on by default. Untick what you're happy for it to do alone.</p>
       </div>
-      <img src="assets/panel-settings.png" alt="Settings: the Ask me before list of approval switches" loading="lazy" class="settings-shot"
+      <img src="assets/panel-settings.png" alt="Settings: the Ask me before list of approval switches" loading="lazy" class="settings-shot">
     </div>
   </section>
 
   <section id="captcha">
     <h2>Gets past CAPTCHA checks</h2>
-    <p class="sub">When a challenge blocks the page, Browser Agent hands just that part to <a href="https://huggingface.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF">CaptchaKraken v1.2</a>, a free CAPTCHA model running on your own GPU, then carries on. You need Ollama, LM Studio or llama.cpp, about 7 GB of GPU memory and a 16k context. It only acts on genuine challenge widgets, and it's off by default. <a href="https://github.com/tmalik22/BrowserExtension#-captcha-helper">Setup guide</a></p>
+    <p class="sub">In the GitHub build only (not the Chrome Web Store version). When a challenge blocks the page, Browser Agent hands just that part to <a href="https://huggingface.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF">CaptchaKraken v1.2</a>, a free CAPTCHA model running on your own GPU, then carries on. You need Ollama, LM Studio or llama.cpp, about 7 GB of GPU memory and a 16k context. It only acts on genuine challenge widgets, and it's off by default. <a href="https://github.com/tmalik22/BrowserExtension#-captcha-helper">Setup guide</a></p>
     <img src="assets/captcha.png" alt="The agent detects a CAPTCHA, CaptchaKraken solves it locally, and the task continues" loading="lazy" class="rounded">
   </section>
 

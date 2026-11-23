@@ -104,6 +104,7 @@
             <button type="button" class="btn" id="btn-confirm-none">All off</button>
           </div>
           <h3>Allowed sites</h3>
+          <p class="muted small">Each entry covers that one site (with or without "www."), not its other subdomains.</p>
           <ul id="allowed-sites" class="sites"></ul>
           <h3>Blocked sites</h3>
           <textarea id="set-blocked" rows="3" placeholder="one domain per line, e.g. mybank.com"></textarea>
@@ -115,11 +116,13 @@
           <label>Max steps per message<input id="set-maxsteps" type="number" min="1" max="500" /></label>
           <label class="check"><input type="checkbox" id="set-autoshot" /> Attach a screenshot after each batch (vision models)</label>
           <label class="check"><input type="checkbox" id="set-lock" /> Block my mouse &amp; keyboard in the agent's tab while it works</label>
+          <!-- store-omit -->
           <label>CAPTCHA helper model
             <select id="set-captcha-helper"><option value="">Off</option></select>
           </label>
           <p class="muted small">When a Cloudflare/Turnstile, reCAPTCHA or hCaptcha check blocks the page, this model solves just the challenge and the main model continues. It is built and tested for <strong>CaptchaKraken v1.2</strong>, a free local CAPTCHA model (about 7 GB of GPU memory, 16k context). Other vision models are experimental.</p>
           <p id="captcha-solver-missing" class="muted small hidden">No CAPTCHA solver found. Install it with <code>ollama pull hf.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF:Q4_K_M</code>, start Ollama with <code>OLLAMA_CONTEXT_LENGTH=16384</code>, then click <strong>Refresh model lists</strong> in the model menu. <a href="https://github.com/tmalik22/BrowserExtension#-captcha-helper" target="_blank" rel="noopener noreferrer">Setup guide</a></p>
+          <!-- /store-omit -->
         </section>
 
         <section>

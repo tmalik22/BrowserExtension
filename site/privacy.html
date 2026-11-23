@@ -33,16 +33,17 @@
       <tr><th>Data</th><th>Why</th><th>Where it goes</th></tr>
       <tr><td><b>Website content</b> of tabs the agent works in (page text, an outline of the page, screenshots, URLs and titles)</td><td>So the AI model you chose can see the page and carry out your task</td><td>Your local Browser Agent server, then the model provider you configured</td></tr>
       <tr><td><b>Your instructions</b> typed into the side panel</td><td>To tell the agent what to do</td><td>Same as above</td></tr>
-      <tr><td><b>Text the agent types</b> for you (e.g. form fields)</td><td>To fill in forms you asked it to</td><td>Stays in the page. Password and card fields are masked in logs</td></tr>
+      <tr><td><b>Text the agent types</b> for you (e.g. form fields)</td><td>To fill in forms you asked it to</td><td>The model you chose writes this text. It is typed into the page and saved in the chat transcript on your own computer. Text typed into password and card fields is masked there</td></tr>
+      <tr><td><b>API keys</b> for model providers, and the <b>pairing secret</b></td><td>To use the model provider you chose, and to connect the extension to your server</td><td>A key you type into the side panel is passed to your local server, which saves it and sends it to that provider with each request. The extension does not keep the key and never gets the full key back, only its last 4 characters as a hint. The pairing secret is kept in Chrome's local extension storage and on your server</td></tr>
       <tr><td><b>Settings</b> (permission choices, allowed and blocked sites, server address, pairing secret)</td><td>To remember your preferences and connect to your server</td><td>Chrome's local extension storage and your server's <code>data/</code> folder</td></tr>
     </table>
-    <p>The agent only works in the tabs of the task you started (its own tab group). <b>It does not read your other tabs</b> or your browsing history.</p>
+    <p>The agent only works in the tabs of the task you started (its own tab group). <b>It does not read your other tabs</b> or your browsing history. One thing outside those tabs is reported to the model: downloads that start while a task is running (their address, and whether they finished), including a download you start yourself during that time.</p>
 
     <h2>Model providers</h2>
     <p>If you use a <b>cloud</b> model (for example Anthropic, OpenAI, Google, OpenRouter or Groq), your server sends the page content and instructions for each task to that provider, using <b>your own API key</b>. Their privacy policies apply to that data. With a <b>local</b> model (Ollama, LM Studio, vLLM, llama.cpp), nothing leaves your computer.</p>
 
     <h2>Storage on your computer</h2>
-    <p>Your server keeps, in its <code>data/</code> folder on your machine: your API keys (readable only by your user account), settings, the pairing token and paired-browser secrets, and task transcripts and screenshots for the chat history. You can delete this folder at any time. Set <code>AGENT_TRANSCRIPTS=0</code> to stop saving transcripts.</p>
+    <p>Your server keeps, in its <code>data/</code> folder on your machine: your API keys (<code>keys.json</code>, in plain text; the file is marked private to your user account), settings, the pairing token and paired-browser secrets, and task transcripts and screenshots for the chat history (in <code>data/sessions</code>), kept until you delete them. You can delete this folder at any time. Set <code>AGENT_KEEP_DAYS</code> to a number of days to have older transcripts deleted when the server starts, or set <code>AGENT_TRANSCRIPTS=0</code> to stop saving transcripts.</p>
 
     <h2>Selling and sharing</h2>
     <p>We do not sell, rent or share any data. We have no way to: your data never reaches us.</p>

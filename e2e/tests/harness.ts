@@ -15,7 +15,8 @@ import type { ModelProfile, ToolResultEntry } from '../../packages/server/src/pr
 import { startFixtureServer, type FixtureServer } from '../fixtures/server.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export const EXT_DIR = path.resolve(here, '../../packages/extension/dist');
+/** The build under test. BA_EXT_DIR points the suite at another one (e.g. the store build in dist-store). */
+export const EXT_DIR = process.env.BA_EXT_DIR ? path.resolve(process.env.BA_EXT_DIR) : path.resolve(here, '../../packages/extension/dist');
 const TOKEN = 'e2e-token';
 
 export interface Env {
@@ -65,8 +66,9 @@ export async function startEnv(settings: Partial<PolicySettings> = {}, opts: Env
       `--disable-extensions-except=${EXT_DIR}`,
       `--load-extension=${EXT_DIR}`,
       '--window-size=1280,800',
-      // Test-only: serve CAPTCHA fixture widgets under a real challenge-provider hostname.
-      '--host-resolver-rules=MAP newassets.hcaptcha.com 127.0.0.1',
+      // Test-only: serve CAPTCHA fixture widgets under a real challenge-provider hostname, and
+      // give the fixture server public-looking names that resolve to a private address.
+      '--host-resolver-rules=MAP newassets.hcaptcha.com 127.0.0.1, MAP *.public-name.example 127.0.0.1',
     ],
   });
   // Playwright auto-dismisses JS dialogs on pages it controls unless a listener exists. In a real

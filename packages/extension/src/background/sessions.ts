@@ -3,8 +3,8 @@
  * (target=_blank, window.open) join the session, the session's active tab, browser_state blocks,
  * and download events.
  */
-import { checkUrlPolicy, sanitizeTitle, sanitizeUrl, type BrowserStateBlock, type BrowserStateChange, type BrowserTab } from '@ba/shared';
-import { attach, detach, isRestrictedUrl, setTabPolicy } from './cdp.ts';
+import { sanitizeTitle, sanitizeUrl, type BrowserStateBlock, type BrowserStateChange, type BrowserTab } from '@ba/shared';
+import { attach, checkTabUrl, detach, isRestrictedUrl, setTabPolicy } from './cdp.ts';
 import { frameCall, resetRefs } from './frames.ts';
 import { forgetScale } from './screenshot.ts';
 
@@ -20,6 +20,30 @@ export interface AgentSession {
   running: boolean;
   lockUserInput: boolean;
   downloads: Map<number, string>;
+  /** Input actions (clicks, keys, navigation...) the agent is carrying out right now. */
+  inputInFlight: number;
+  /** When the agent's last input action finished. */
+  lastInputAt: number;
+}
+
+/**
+ * A tab opened from one of the task's tabs joins the task only if the agent's own action can have
+ * opened it: while an input action runs, or just after. The user's own new tabs and link clicks
+ * (and anything opened once the task has finished) stay out of the agent's reach.
+ */
+const ADOPT_WINDOW_MS = 3000;
+
+export function inputBegan(s: AgentSession): void {
+  s.inputInFlight++;
+}
+
+export function inputEnded(s: AgentSession): void {
+  s.inputInFlight = Math.max(0, s.inputInFlight - 1);
+  s.lastInputAt = Date.now();
+}
+
+function agentJustActed(s: AgentSession): boolean {
+  return s.running && (s.inputInFlight > 0 || Date.now() - s.lastInputAt < ADOPT_WINDOW_MS);
 }
 
 const sessions = new Map<string, AgentSession>();
@@ -82,9 +106,22 @@ export async function overlay(tabId: number, on: boolean, s?: AgentSession): Pro
   }
 }
 
+/**
+ * The debugger is attached to the task's tabs only while the agent is working. When the task
+ * goes idle it lets go (Chrome's "is debugging this browser" bar goes away and requests are no
+ * longer intercepted), and it re-attaches when the user sends the next message.
+ */
 export async function setRunning(s: AgentSession, running: boolean): Promise<void> {
   s.running = running;
   await Promise.all(s.tabs.map((t) => overlay(t, running && t === s.activeTab, s)));
+  for (const t of [...s.tabs]) {
+    if (running) {
+      const tab = await chrome.tabs.get(t).catch(() => undefined);
+      if (tab && !isRestrictedUrl(tab.pendingUrl || tab.url)) await attach(t).catch(() => {});
+    } else if (!s.running && !allSessions().some((o) => o !== s && o.running && o.tabs.includes(t))) {
+      await detach(t);
+    }
+  }
 }
 
 export async function beginSession(params: { sessionId: string; tabId?: string; startUrl?: string; title: string; lockUserInput: boolean; urlPolicy: { allowPrivateNetworks: boolean; blockedSites: string[] } }): Promise<{ activeTabId: string; tabs: BrowserTab[] }> {
@@ -92,10 +129,12 @@ export async function beginSession(params: { sessionId: string; tabId?: string; 
   if (s) return { activeTabId: tabIdStr(s.activeTab), tabs: await tabEntries(s) };
   let tab: chrome.tabs.Tab | undefined;
   if (params.startUrl) {
-    const err = checkUrlPolicy(params.startUrl, params.urlPolicy);
+    const err = checkTabUrl(params.startUrl, params.urlPolicy);
     if (err) throw new Error(err);
     const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => undefined);
-    tab = await chrome.tabs.create({ url: params.startUrl, active: true, windowId: win?.id });
+    // Open a blank tab first and load the page once the debugger is attached (below), so the
+    // first request is checked like every later one.
+    tab = await chrome.tabs.create({ url: 'about:blank', active: true, windowId: win?.id });
   } else if (params.tabId) {
     tab = await chrome.tabs.get(parseTabId(params.tabId));
   } else {
@@ -125,6 +164,8 @@ export async function beginSession(params: { sessionId: string; tabId?: string; 
     running: true,
     lockUserInput: params.lockUserInput,
     downloads: new Map(),
+    inputInFlight: 0,
+    lastInputAt: 0,
   };
   sessions.set(s.id, s);
   rememberPolicy(s, params.urlPolicy);
@@ -133,9 +174,32 @@ export async function beginSession(params: { sessionId: string; tabId?: string; 
     await attach(tab.id!).catch(() => {});
     await overlay(tab.id!, true, s);
   }
+  if (params.startUrl) {
+    await chrome.tabs.update(tab.id!, { url: params.startUrl });
+    await waitLoaded(tab.id!, 10_000);
+    // The overlay (and the input lock) belong on the page that was just loaded.
+    if (!isRestrictedUrl((await chrome.tabs.get(tab.id!).catch(() => undefined))?.url)) await overlay(tab.id!, true, s);
+  }
   const tabs = await tabEntries(s);
   s.lastReported = JSON.stringify(tabs);
   return { activeTabId: tabIdStr(s.activeTab), tabs };
+}
+
+/**
+ * Wait until the tab has left about:blank and finished loading the page it was sent to, so the
+ * task's first look at the page sees all of it. Gives up when the time runs out, or early when
+ * nothing is loading any more (the address was a download, for example).
+ */
+async function waitLoaded(tabId: number, maxMs: number): Promise<void> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) {
+    const t = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (!t) return;
+    const idle = t.status === 'complete' && !t.pendingUrl;
+    if (idle && t.url && t.url !== 'about:blank') return;
+    if (idle && Date.now() - t0 > 1500) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
 }
 
 export async function endSession(id: string): Promise<void> {
@@ -228,7 +292,7 @@ export async function stateBlock(s: AgentSession, force: boolean): Promise<Brows
 chrome.tabs.onCreated.addListener((tab) => {
   if (tab.id == null || tab.openerTabId == null) return;
   const s = sessionForTab(tab.openerTabId);
-  if (!s) return;
+  if (!s || !agentJustActed(s)) return;
   void (async () => {
     await addTab(s, tab.id!, true);
     // Chrome focuses foreground popups/new tabs: follow it so the agent sees what the user sees.

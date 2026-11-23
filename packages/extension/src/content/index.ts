@@ -124,7 +124,31 @@ function shadowRootOf(el: Element): ShadowRoot | null {
   }
 }
 
-function captchaHit(x: number, y: number): { ok: boolean } {
+/**
+ * The <iframe> element hosting a child window, including one inside a closed shadow root (where
+ * challenge widgets such as Turnstile live), which the ordinary scan cannot see.
+ */
+function frameElementFor(source: MessageEventSource | null): HTMLIFrameElement | undefined {
+  const direct = allIframes().find((f) => f.contentWindow === source);
+  if (direct) return direct;
+  let found: HTMLIFrameElement | undefined;
+  const visit = (n: Node) => {
+    if (found) return;
+    if (n instanceof HTMLIFrameElement && n.contentWindow === source) {
+      found = n;
+      return;
+    }
+    if (n instanceof Element) {
+      const root = shadowRootOf(n);
+      if (root) for (const c of root.childNodes) visit(c);
+    }
+    for (const c of n.childNodes) visit(c);
+  };
+  visit(document.documentElement);
+  return found;
+}
+
+function captchaHit(x: number, y: number): { ok: boolean; iframeId?: number } {
   if (window !== window.top || !Number.isFinite(x) || !Number.isFinite(y)) return { ok: false };
   // Widgets such as Turnstile put their iframe inside a (often closed) shadow root, where the
   // document-level hit is only the host. Descend to the deepest element: anything the page lays
@@ -136,7 +160,10 @@ function captchaHit(x: number, y: number): { ok: boolean } {
     if (!inner || inner === el) break;
     el = inner;
   }
-  return { ok: el instanceof HTMLIFrameElement && isChallengeUrl(el.src) };
+  // The src attribute is only the page's claim (it stays put when the frame is navigated). The
+  // service worker checks which page the frame is really showing before anything is clicked.
+  if (!(el instanceof HTMLIFrameElement) || !isChallengeUrl(el.src)) return { ok: false };
+  return { ok: true, iframeId: localId(el) };
 }
 
 function captchaLocate(): { rect: { x: number; y: number; w: number; h: number }; inIframe: boolean } {
@@ -174,7 +201,7 @@ function captchaGrid(): { rows: number; cols: number; cells: { x: number; y: num
 function onProbe(e: MessageEvent): void {
   const token = e.data && typeof e.data === 'object' ? (e.data as { __baProbe?: unknown }).__baProbe : undefined;
   if (typeof token !== 'string' || !token.startsWith('baprobe_')) return;
-  const frame = allIframes().find((f) => f.contentWindow === e.source);
+  const frame = frameElementFor(e.source);
   if (!frame) return;
   const r = frame.getBoundingClientRect();
   const cs = getComputedStyle(frame);
@@ -226,14 +253,6 @@ async function handle(msg: Msg): Promise<unknown> {
       return scrollState();
     case 'ba:viewport':
       return { width: innerWidth, height: innerHeight, dpr: devicePixelRatio };
-    case 'ba:captcha_probe':
-      return probeCaptcha();
-    case 'ba:captcha_locate':
-      return captchaLocate();
-    case 'ba:captcha_hit':
-      return captchaHit(Number(msg.x), Number(msg.y));
-    case 'ba:captcha_grid':
-      return captchaGrid();
     case 'ba:probe_parent':
       if (window === window.top) return { top: true };
       window.parent.postMessage({ __baProbe: msg.token }, '*');
@@ -262,7 +281,26 @@ async function handle(msg: Msg): Promise<unknown> {
       return { ok: true };
     }
     default:
-      return { error: `unknown message ${msg.type}` };
+      // The CAPTCHA helper's messages exist in the GitHub build only (the constant lets the
+      // bundler drop the helper's code from the Chrome Web Store build).
+      return __BA_STORE__ ? unknownMessage(msg) : helperMessage(msg);
+  }
+}
+
+const unknownMessage = (msg: Msg) => ({ error: `unknown message ${msg.type}` });
+
+function helperMessage(msg: Msg): unknown {
+  switch (msg.type) {
+    case 'ba:captcha_probe':
+      return probeCaptcha();
+    case 'ba:captcha_locate':
+      return captchaLocate();
+    case 'ba:captcha_hit':
+      return captchaHit(Number(msg.x), Number(msg.y));
+    case 'ba:captcha_grid':
+      return captchaGrid();
+    default:
+      return unknownMessage(msg);
   }
 }
 

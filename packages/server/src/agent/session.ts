@@ -31,7 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { buildCaptchaPrompt, buildSystemPrompt, taskPreamble } from './system-prompt.ts';
 import { ACTION_PROMPT, CAPTCHA_SYSTEM, gridPrompt, TEXT_PROMPT } from './captcha-prompts.ts';
-import { PAGE_READ_MEMBERS, checkUploadPaths, evaluate, needsDescription, type PolicyState } from './policy.ts';
+import { PAGE_READ_MEMBERS, approvedSites, checkUploadPaths, evaluate, needsDescription, type PolicyState } from './policy.ts';
 import {
   ProviderError,
   type AssistantPart,
@@ -771,6 +771,7 @@ export class Session {
         enableOptional: settings.enableOptional,
         uploadDir: settings.uploadDir,
         lockUserInput: settings.lockUserInput,
+        ...(settings.permissionMode === 'ask' ? { approvedSites: approvedSites(settings, this.policyState) } : {}),
       },
       expectDocKey: desc?.docKey,
     };

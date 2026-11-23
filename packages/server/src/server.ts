@@ -29,9 +29,15 @@ import { ModelCatalog, mergeCatalog, type CatalogProvider } from './catalog.ts';
 import { detectLocalModels, mergeDetected, type LocalServer } from './local-models.ts';
 import { PairedClients, clientProof, newNonce, safeEqualHex, serverProof, startPairingExchange, whoamiProof, type PairPrompter } from './pairing.ts';
 
-export const SERVER_VERSION = '0.3.2';
+export const SERVER_VERSION = '0.3.3';
 const RECONNECT_GRACE_MS = 20_000;
 const EVENT_BUFFER = 2000;
+/**
+ * Chats kept in memory (each holds its whole conversation, screenshots included). Beyond this,
+ * the idle chats used longest ago are let go; they stay readable, and can be carried on, from
+ * their saved transcripts.
+ */
+export const MAX_LIVE_SESSIONS = 40;
 
 type Pending = { resolve(v: unknown): void; reject(e: Error): void; timer: NodeJS.Timeout; conn: WebSocket };
 
@@ -121,6 +127,8 @@ interface SessionEntry {
   autoApprove?: ApprovalDecision;
   /** Saved chat this one carries on from. */
   continuedFrom?: string;
+  /** When a message was last sent to it. */
+  lastUsed: number;
 }
 
 interface PendingApproval {
@@ -139,6 +147,8 @@ export interface StartOptions {
   autoApprove?: ApprovalDecision;
   /** Start a new chat carrying on from this saved one. */
   continueFrom?: string;
+  /** Only carry on chats this browser may see (set for requests that come from an extension). */
+  scopeToClient?: boolean;
 }
 
 export class AgentServer implements SessionHost {
@@ -146,6 +156,8 @@ export class AgentServer implements SessionHost {
   readonly keyStore: KeyStore;
   readonly transcripts: TranscriptWriter;
   readonly chats: ChatHistory;
+  /** Saved chats deleted at start-up because they were older than keepDays. */
+  readonly prunedChats: number;
   private clients = new Map<string, ClientHandle>();
   private sessions = new Map<string, SessionEntry>();
   private approvals = new Map<string, PendingApproval>();
@@ -185,6 +197,8 @@ export class AgentServer implements SessionHost {
       detectLocal?: boolean | LocalServer[];
       /** Fetch live model lists from providers the user has keys for (true = all known providers). */
       catalog?: boolean | CatalogProvider[];
+      /** Delete saved chats not touched for this many days when starting (unset = keep everything). */
+      keepDays?: number;
     } = {},
   ) {
     this.onShutdownRequest = opts.onShutdownRequest;
@@ -221,6 +235,7 @@ export class AgentServer implements SessionHost {
     );
     this.transcripts = new TranscriptWriter(config.dataDir, opts.transcripts ?? true);
     this.chats = new ChatHistory(config.dataDir);
+    this.prunedChats = this.chats.prune(opts.keepDays);
     this.profiles = new Map(config.profiles.map((p) => [p.id, p]));
     this.rebuildProfiles(false); // cached catalogs show up straight away
     this.httpServer = http.createServer((req, res) => this.handleHttp(req, res));
@@ -324,6 +339,9 @@ export class AgentServer implements SessionHost {
       }
     };
     if (await ok()) return;
+    // The start script is a PowerShell script: there is nothing to run it with elsewhere.
+    if (process.platform !== 'win32') return;
+    let failed = false;
     try {
       // No `detached` on Windows: a detached powershell launches llama-server into a dead
       // console here, so the server never binds. stdio:'ignore' + windowsHide is enough.
@@ -331,12 +349,17 @@ export class AgentServer implements SessionHost {
         stdio: 'ignore',
         windowsHide: true,
       });
+      // A program that can't be started reports it as an 'error' event, which ends the whole
+      // process when nothing listens for it.
+      child.on('error', () => {
+        failed = true;
+      });
       child.unref();
     } catch {
       return;
     }
     const deadline = Date.now() + 300_000;
-    while (Date.now() < deadline) {
+    while (Date.now() < deadline && !failed) {
       await new Promise((r) => setTimeout(r, 1500));
       if (await ok()) return;
     }
@@ -432,26 +455,48 @@ export class AgentServer implements SessionHost {
       });
       let context: string | undefined;
       if (opts.continueFrom) {
-        context = this.chats.recap(opts.continueFrom) ?? undefined;
+        const saved = this.chats.find(opts.continueFrom);
+        const mine = !!saved && (!opts.scopeToClient || this.chats.visibleTo(saved, clientId));
+        context = (mine && this.chats.recap(opts.continueFrom)) || undefined;
         if (!context) throw new Error("That earlier chat couldn't be found anymore, so it can't be continued. Start a new task instead.");
         session.title = this.chats.titleFor(opts.continueFrom) ?? session.title;
       }
-      entry = { session, clientId, events: [], seq: 0, listeners: new Set(), autoApprove: opts.autoApprove, continuedFrom: opts.continueFrom };
+      entry = { session, clientId, events: [], seq: 0, listeners: new Set(), autoApprove: opts.autoApprove, continuedFrom: opts.continueFrom, lastUsed: Date.now() };
       this.sessions.set(session.id, entry);
+      this.releaseOldSessions();
+      // Which browser the chat belongs to, so another paired browser isn't shown it later.
+      this.log(session.id, { kind: 'session', client: clientId });
       if (opts.continueFrom) this.log(session.id, { kind: 'continued_from', sessionId: opts.continueFrom });
       const done = session.send(opts.text, context);
       done.catch(() => {});
       return { sessionId: session.id, done };
     } else if (entry.session.running) {
       // Deliver it to the running agent at its next step.
+      entry.lastUsed = Date.now();
       entry.session.interject(opts.text);
       return { sessionId: entry.session.id, done: entry.session.settled() };
-    } else if (profile.id !== entry.session.profile.id) {
+    } else {
+      // Also when the model is unchanged: its API key may have been replaced since the last turn.
       entry.session.setProvider(profile, this.providerFor(profile));
     }
+    entry.lastUsed = Date.now();
     const done = entry.session.send(opts.text);
     done.catch(() => {});
     return { sessionId: entry.session.id, done };
+  }
+
+  /** Let go of the idle chats used longest ago once more than MAX_LIVE_SESSIONS are in memory. */
+  private releaseOldSessions(): void {
+    const extra = this.sessions.size - MAX_LIVE_SESSIONS;
+    if (extra <= 0) return;
+    const idle = [...this.sessions.entries()]
+      .filter(([, e]) => !e.session.running && !e.listeners.size)
+      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+    for (const [id, e] of idle.slice(0, extra)) {
+      this.sessions.delete(id);
+      // Tells the browser to let go of the chat's tabs too.
+      void e.session.end().catch(() => {});
+    }
   }
 
   /** Past and current chats for one browser, newest first. */
@@ -459,7 +504,7 @@ export class AgentServer implements SessionHost {
     const live = new Map([...this.sessions.values()].filter((e) => e.clientId === clientId).map((e) => [e.session.id, e]));
     const folded = new Set([...live.values()].map((e) => e.continuedFrom).filter(Boolean));
     const out: ChatInfo[] = [];
-    for (const c of this.chats.list(limit)) {
+    for (const c of this.chats.list(limit, clientId)) {
       if (folded.has(c.sessionId)) continue;
       const e = live.get(c.sessionId);
       live.delete(c.sessionId);
@@ -783,13 +828,18 @@ export class AgentServer implements SessionHost {
         try {
           const existing = frame.sessionId ? this.sessions.get(frame.sessionId) : undefined;
           if (existing && existing.clientId !== client.clientId) throw new Error('That session belongs to another browser.');
+          // A chat that is no longer in memory (let go, or from before a restart) but was saved:
+          // carry it on in a new chat rather than failing.
+          const saved = frame.sessionId && !existing ? this.chats.find(String(frame.sessionId)) : null;
+          const carryOn = saved && this.chats.visibleTo(saved, client.clientId) ? String(frame.sessionId) : undefined;
           const { sessionId } = this.startOrContinue({
             clientId: client.clientId,
-            sessionId: frame.sessionId,
+            sessionId: carryOn ? undefined : frame.sessionId,
             text: frame.text,
             profileId: frame.profileId,
             tabId: frame.tabId,
-            continueFrom: frame.sessionId ? undefined : frame.continueFrom,
+            continueFrom: carryOn ?? (frame.sessionId ? undefined : frame.continueFrom),
+            scopeToClient: true,
           });
           this.respond(client, frame.requestId, true, { sessionId });
         } catch (e) {
@@ -823,6 +873,9 @@ export class AgentServer implements SessionHost {
       case 'set_api_key':
         try {
           this.keyStore.set(String(frame.name), String(frame.key ?? ''));
+          // Model connections are built with the key they were created with: drop them so the
+          // next message uses the new key.
+          this.providers.clear();
           this.respond(client, frame.requestId, true, this.keyStore.info());
           this.rebuildProfiles(); // models needing this key become (un)available
           void this.refreshCatalogFor(String(frame.name));
@@ -875,7 +928,8 @@ export class AgentServer implements SessionHost {
         }
         if (!e) {
           // Not in memory (e.g. the server restarted): redraw it from its saved transcript.
-          const saved = this.chats.replay(String(frame.sessionId));
+          const chat = this.chats.find(String(frame.sessionId));
+          const saved = chat && this.chats.visibleTo(chat, client.clientId) ? this.chats.replay(String(frame.sessionId)) : null;
           if (!saved) this.respond(client, frame.requestId, false, undefined, 'Unknown session');
           else this.respond(client, frame.requestId, true, { events: saved.map((event) => ({ seq: 0, event })), pendingApprovals: [], status: 'idle', archived: true });
           return;

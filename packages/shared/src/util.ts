@@ -140,15 +140,38 @@ export interface UrlPolicy {
   blockedSites: string[];
 }
 
-/** Returns an error message when the URL may not be visited, else null. */
-/** Browser-internal, extension and web-store pages, which extensions can't (and the agent mustn't) read or control. */
+/**
+ * Browser-internal, extension and web-store pages, which extensions can't (and the agent mustn't)
+ * read or control, and local files (file:), which have no site to approve and may hold anything.
+ */
 export function isRestrictedUrl(url: string | undefined): boolean {
   if (!url) return false;
   return (
-    /^(chrome|edge|brave|opera|vivaldi|about|devtools|chrome-extension|chrome-search|view-source|chrome-untrusted|moz-extension):/i.test(url) && url !== 'about:blank'
+    /^(chrome|edge|brave|opera|vivaldi|about|devtools|chrome-extension|chrome-search|view-source|chrome-untrusted|moz-extension|file):/i.test(url) && url !== 'about:blank'
   ) || /^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com)/i.test(url);
 }
 
+/**
+ * Has the user approved this host? An entry approves that one site ("example.com" also covers
+ * "www.example.com"), not its other subdomains: approving a company's home page must not also
+ * approve its mail, payments or account sites. "*.example.com" approves every subdomain on purpose.
+ */
+export function siteApproved(host: string, entries: Iterable<string>): boolean {
+  const h = siteKey(host.replace(/\.$/, ''));
+  if (!h) return false;
+  for (const raw of entries) {
+    const e = raw.toLowerCase().trim();
+    if (e.startsWith('*.')) {
+      if (hostMatches(host, e)) return true;
+      continue;
+    }
+    const s = e.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '').replace(/\.$/, '');
+    if (s && siteKey(s) === h) return true;
+  }
+  return false;
+}
+
+/** Returns an error message when the URL may not be visited, else null. */
 export function checkUrlPolicy(url: string, policy: UrlPolicy): string | null {
   let u: URL;
   try {

@@ -90,11 +90,19 @@ test('screenshot + coordinate click on a canvas; zoom returns an upscaled crop',
     () => [{ name: 'left_click', input: { target: { type: 'coordinate', x: 5000, y: 10 } } }],
     () => 'done',
   ]);
-  const r = await run(env, s, { startUrl: env.fx.url('canvas.html') });
+  // The viewport as it was when the screenshot was taken: Chrome's debugging bar is only there
+  // while the agent works, so the page is a little taller again once the task has finished.
+  let during: Promise<number[]> | undefined;
+  const r = await run(env, s, {
+    startUrl: env.fx.url('canvas.html'),
+    onEvent: (e) => {
+      if (e.type === 'tool_call' && e.member === 'screenshot' && !during) during = pageFor(env, 'canvas.html').then((p) => p.evaluate(() => [innerWidth, innerHeight]));
+    },
+  });
   const shot = r.results[0].result.content.find((b) => b.type === 'image') as any;
   expect(shot.mediaType).toBe('image/jpeg');
   const page = await pageFor(env, 'canvas.html');
-  const vp = await page.evaluate(() => [innerWidth, innerHeight]);
+  const vp = await during!;
   // Viewport fits the image limits, so the screenshot is 1:1 with CSS pixels.
   expect([shot.width, shot.height]).toEqual(vp);
   await expect(page.locator('#log')).toHaveText('play pressed');
@@ -162,14 +170,18 @@ test('downloads are reported as browser_state download events', async () => {
     () => 'done',
   ]);
   const r = await run(env, s, { startUrl: env.fx.url('files.html') });
-  const changes = r.results.flatMap((x) => ((x.result.content.find((b) => b.type === 'browser_state') as any)?.state_changes ?? []));
-  // A download that starts and finishes during one call reports only download_completed
-  // (one entry per download_id per block, per the toolset contract).
+  const blocks: any[][] = r.results.map((x) => (x.result.content.find((b) => b.type === 'browser_state') as any)?.state_changes ?? []);
+  const changes = blocks.flat();
   const completed = changes.filter((c: any) => c.type === 'download_completed');
   expect(completed.length).toBe(1);
   expect(completed[0]).toMatchObject({ download_id: 'dl-1', size_bytes: 8 });
   expect(completed[0].url).toContain('/download/report.csv');
-  expect(changes.filter((c: any) => c.download_id === 'dl-1').length).toBe(1);
+  // One entry per download_id per block (per the toolset contract). A download that starts and
+  // finishes during one call reports only download_completed; when the click returns before the
+  // file is done, download_started comes first, in that call's own block.
+  for (const b of blocks) expect(b.filter((c: any) => c.download_id === 'dl-1').length).toBeLessThanOrEqual(1);
+  const kinds = changes.filter((c: any) => c.download_id === 'dl-1').map((c: any) => c.type);
+  expect([['download_completed'], ['download_started', 'download_completed']]).toContainEqual(kinds);
 });
 
 test('file_upload (optional member) sets files from the upload directory only', async () => {

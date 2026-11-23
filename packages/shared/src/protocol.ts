@@ -417,7 +417,13 @@ export interface ExecuteParams {
   input: Record<string, unknown>;
   /** Attach a screenshot to this result (auto observation). */
   attachScreenshot?: boolean;
-  settings: Pick<PolicySettings, 'allowPrivateNetworks' | 'blockedSites' | 'enableOptional' | 'uploadDir' | 'lockUserInput'>;
+  settings: Pick<PolicySettings, 'allowPrivateNetworks' | 'blockedSites' | 'enableOptional' | 'uploadDir' | 'lockUserInput'> & {
+    /**
+     * Permission mode "ask" only: the sites the user has approved (for good or for this task).
+     * Embedded frames from other sites are not read out to the model.
+     */
+    approvedSites?: string[];
+  };
   /** From describe: the action is only valid on this same document. */
   expectDocKey?: string;
 }

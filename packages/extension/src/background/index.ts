@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, newId, type ClientFrame, type ExecuteParams, type Gpu
 import { Bridge } from './bridge.ts';
 import { onCdpEvent, onDetach } from './cdp.ts';
 import { captchaAction, captchaObserve, describe, execute, onDialogOpened, probeCaptcha } from './executor.ts';
-import { addTab, allSessions, beginSession, endSession, getSession, sessionForTab, setActiveTab, setRunning, setUserStopHandler } from './sessions.ts';
+import { addTab, allSessions, beginSession, endSession, getSession, sessionForTab, setActiveTab, setRunning, setUserStopHandler, type AgentSession } from './sessions.ts';
 
 const ports = new Set<chrome.runtime.Port>();
 let lastGpu: GpuStatus | undefined;
@@ -75,15 +75,11 @@ async function onRpc(method: string, params: Record<string, unknown>): Promise<u
       });
     }
     case 'execute':
+      await resume(String(params.sessionId));
       return execute(params as unknown as ExecuteParams);
     case 'describe':
+      await resume(String(params.sessionId));
       return describe(params as any);
-    case 'captcha_probe':
-      return probeCaptcha(params as { sessionId: string; tab_id?: string });
-    case 'captcha_observe':
-      return captchaObserve(params as { sessionId: string; tab_id?: string });
-    case 'captcha_action':
-      return captchaAction(params as { sessionId: string; tab_id?: string; plan: import('@ba/shared').CaptchaActionPlan });
     case 'session_end':
       await endSession(String(params.sessionId));
       return { ok: true };
@@ -96,8 +92,51 @@ async function onRpc(method: string, params: Record<string, unknown>): Promise<u
       return { ok: true };
     }
     default:
-      throw new Error(`Unknown RPC method ${method}`);
+      // The Chrome Web Store build has no CAPTCHA helper: its RPCs don't exist there (the server
+      // takes a failed probe as "no challenge"), and the constant lets the bundler drop the code.
+      return __BA_STORE__ ? unknownRpc(method) : helperRpc(method, params);
   }
+}
+
+function unknownRpc(method: string): never {
+  throw new Error(`Unknown RPC method ${method}`);
+}
+
+/** RPCs of the CAPTCHA helper (GitHub build only). */
+async function helperRpc(method: string, params: Record<string, unknown>): Promise<unknown> {
+  switch (method) {
+    case 'captcha_probe':
+      return probeCaptcha(params as { sessionId: string; tab_id?: string });
+    case 'captcha_observe':
+      return captchaObserve(params as { sessionId: string; tab_id?: string });
+    case 'captcha_action':
+      return captchaAction(params as { sessionId: string; tab_id?: string; plan: import('@ba/shared').CaptchaActionPlan });
+    default:
+      return unknownRpc(method);
+  }
+}
+
+/**
+ * The server only acts for a task that is running. If this side marked the task stopped while
+ * the connection was down (see stopAll), a new action means it carried on: show it as working
+ * again, with the debugger attached and requests checked.
+ */
+async function resume(sessionId: string): Promise<void> {
+  const s = allSessions().find((x) => x.id === sessionId);
+  if (s && !s.running) await setRunning(s, true);
+}
+
+/**
+ * The connection to the server is gone: nothing can drive the tabs, and no "task finished" will
+ * arrive. Let go of them (overlay, input lock, debugger) rather than leaving the user's page
+ * locked behind an "Agent is working" pill whose Stop button has nobody to tell.
+ */
+function stopAll(): void {
+  for (const s of allSessions()) if (s.running) void setRunning(s, false).catch(() => {});
+}
+
+function stopLocally(s: AgentSession | undefined): void {
+  if (s?.running) void setRunning(s, false).catch(() => {});
 }
 
 function onFrame(f: ServerFrame): void {
@@ -126,7 +165,10 @@ function onFrame(f: ServerFrame): void {
   }
 }
 
-const bridge = new Bridge(onRpc, onFrame, () => broadcast(connMessage()));
+const bridge = new Bridge(onRpc, onFrame, () => {
+  if (bridge.state !== 'connected') stopAll();
+  broadcast(connMessage());
+});
 
 // Side panel ----------------------------------------------------------------------------------
 
@@ -272,7 +314,8 @@ chrome.runtime.onConnect.addListener((port) => {
 // Wiring --------------------------------------------------------------------------------------
 
 setUserStopHandler((sessionId) => {
-  bridge.send({ type: 'stop', sessionId });
+  // Stop always works for the user, even when the server can't be told.
+  if (!bridge.send({ type: 'stop', sessionId })) stopLocally(allSessions().find((x) => x.id === sessionId));
 });
 
 onCdpEvent((tabId, method, params) => {

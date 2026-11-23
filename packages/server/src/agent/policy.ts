@@ -13,8 +13,8 @@ import {
   TAB_MEMBERS,
   checkUrlPolicy,
   isRestrictedUrl,
-  hostMatches,
   parseNavigateUrl,
+  siteApproved,
   siteKey,
   type ActionDescription,
   CONFIRM_CATEGORIES,
@@ -44,12 +44,46 @@ const CATEGORY_WORDS: [ConfirmCategory, RegExp][] = [
   ['forms', /\b(submit)\b/i],
 ];
 
+/** Whole words in any script (JavaScript's \b only knows ASCII letters). */
+const words = (list: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${list})(?![\\p{L}\\p{N}])`, 'iu');
+
+/**
+ * The same actions in German, Spanish, Portuguese, French, Italian and Dutch, and (matched
+ * anywhere, since these scripts have no word breaks) Chinese and Japanese. Deliberately the plain
+ * action words only: a wider net would ask about every cookie banner and "sort by" menu.
+ */
+const CATEGORY_WORDS_INTL: [ConfirmCategory, RegExp][] = [
+  ['payments', words(
+    '(?:jetzt )?kaufen|bezahlen|(?:zahlungs|kosten)pflichtig bestellen|bestellen|bestellung (?:abschicken|aufgeben|plaatsen)|abonnieren|spenden|überweisen|buchen' +
+    '|comprar|pagar|realizar (?:el )?pedido|finalizar (?:a |la )?(?:compra|pedido)|suscribir(?:se|me)?|assinar|donar|doar|transferir|reservar' +
+    '|acheter|payer|commander|(?:passer|valider) (?:la |ma )?commande|s[\'’]abonner|faire un don|réserver' +
+    '|acquista(?:re)?|paga(?:re)?|abbonati|dona(?:re)?|prenota(?:re)?|kopen|betalen|afrekenen|doneren',
+  )],
+  ['payments', /购买|購買|支付|付款|下单|下單|结算|結帳|订阅|訂閱|捐赠|转账|轉帳|購入|注文|支払|決済|予約/],
+  ['messages', words(
+    'enviar|publicar|responder|envoyer|publier|répondre|senden|absenden|abschicken|veröffentlichen|antworten|posten' +
+    '|invia(?:re)?|pubblica(?:re)?|rispondi|verzenden|versturen',
+  )],
+  ['messages', /发送|發送|发布|發布|发表|發表|回复|回覆|送信|投稿|返信/],
+  ['deletions', words(
+    'löschen|kündigen|abbestellen|eliminar|borrar|darse de baja|cancelar (?:a |la )?(?:suscripción|assinatura|subscrição)|excluir|apagar' +
+    '|supprimer|effacer|se désabonner|résilier|elimina(?:re)?|cancella(?:re)?|disdici|verwijderen|opzeggen',
+  )],
+  ['deletions', /删除|刪除|注销|註銷|取消订阅|取消訂閱|削除|退会|解約/],
+  ['agreements', words(
+    'ich stimme zu|(?:agb|bedingungen|nutzungsbedingungen) (?:akzeptieren|zustimmen)|acepto|aceptar (?:los )?términos|aceito|aceitar (?:os )?termos' +
+    '|j[\'’]accepte|accepter (?:les )?conditions|accetto|accetta(?:re)? (?:i )?termini|ik ga akkoord',
+  )],
+  ['agreements', /同意/],
+  ['forms', /提交/],
+];
+
 /** The first enabled category whose words match the start of a control's label. */
 export function categorize(label: string, confirm: ConfirmSettings): ConfirmCategory | undefined {
   // Only the start of a label is the control's action; long accessible names often carry a
   // description ("Match ... matches every invoice to payment records") that isn't the action.
   const head = label.slice(0, 40);
-  return CATEGORY_WORDS.find(([id, re]) => confirm[id] && re.test(head))?.[0];
+  return [...CATEGORY_WORDS, ...CATEGORY_WORDS_INTL].find(([id, re]) => confirm[id] && re.test(head))?.[0];
 }
 
 const LABEL = Object.fromEntries(CONFIRM_CATEGORIES.map((c) => [c.id, c.label])) as Record<ConfirmCategory, string>;
@@ -143,7 +177,19 @@ export function needsDescription(member: string): boolean {
 function siteAllowed(host: string, settings: PolicySettings, state: PolicyState): boolean {
   const key = siteKey(host);
   if (state.sessionSites.has(key)) return true;
-  return settings.allowedSites.some((s) => hostMatches(host, s));
+  // One approval covers one site, not every subdomain of it (see siteApproved).
+  return siteApproved(host, settings.allowedSites);
+}
+
+/** Sites whose pages the agent may read right now: approved for good, or for this session. */
+export function approvedSites(settings: PolicySettings, state: PolicyState): string[] {
+  return [...settings.allowedSites, ...state.sessionSites];
+}
+
+/** Ctrl/Cmd+V and Shift+Insert paste whatever the user last copied into the page. */
+export function pastesClipboard(member: string, input: Record<string, unknown>): boolean {
+  if (member !== 'key' && member !== 'hold_key') return false;
+  return chordsOf(input.text).some((c) => (c.key === 'v' && (c.mods.has('ctrl') || c.mods.has('meta'))) || (c.key === 'insert' && c.mods.has('shift')));
 }
 
 export function checkUploadPaths(paths: unknown, uploadDir: string | undefined): string | null {
@@ -213,7 +259,7 @@ export function evaluate(
   // Browser-internal and extension pages (including this extension's own panel) are off limits:
   // refuse outright rather than asking the user to approve something that must never happen.
   if (desc?.url && member !== 'wait' && isRestrictedUrl(desc.url)) {
-    return { kind: 'deny', message: `Error: that tab shows a browser-internal or extension page (${desc.url.slice(0, 80)}), which the agent can't read or control. Use navigate to open a website.` };
+    return { kind: 'deny', message: `Error: that tab shows a browser-internal page, an extension page or a local file (${desc.url.slice(0, 80)}), which the agent can't read or control. Use navigate to open a website.` };
   }
 
   if (!needsDescription(member)) {
@@ -354,6 +400,18 @@ export function evaluate(
         summary: `Press ${String(input.text).slice(0, 60)}`,
       };
     }
+  }
+  // Pasting puts whatever the user last copied (a password, an address, a private note) into the
+  // page, where its scripts can read it. The agent can't see the clipboard, so the user decides.
+  if (confirm.sensitiveFields && pastesClipboard(member, input)) {
+    return {
+      kind: 'ask',
+      approvalKind: 'sensitive',
+      category: 'sensitiveFields',
+      site: desc.host,
+      reason: `Paste whatever is on your clipboard into ${desc.host || 'this page'}. The page will be able to read it.`,
+      summary: `Press ${String(input.text).slice(0, 60)} (paste your clipboard)`,
+    };
   }
   // Key presses into a password / card field are typing into it.
   if ((member === 'key' || member === 'hold_key') && el?.sensitive && confirm.sensitiveFields && keysOf(input.text).some((k) => k.length === 1 || k === 'space')) {

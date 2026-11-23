@@ -17,7 +17,7 @@ Use **any model**: cloud APIs, your own GPU, self-hosted servers, fine-tunes, ev
 ![Chrome MV3](https://img.shields.io/badge/Chrome-MV3%20extension-4285F4?logo=googlechrome&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-242%20unit%20%2B%2079%20e2e-brightgreen)
+![Tests](https://img.shields.io/badge/tests-270%20unit%20%2B%2091%20e2e-brightgreen)
 ![Local models](https://img.shields.io/badge/runs%20on-Ollama%20·%20LM%20Studio%20·%20vLLM%20·%20llama.cpp-8A2BE2)
 
 **[Quick start](#-quick-start)** · **[See it in action](#-see-it-in-action)** · **[CAPTCHA helper](#-captcha-helper)** · **[Any model](#-works-with-any-model)** · **[Security](#-security-model)**
@@ -71,7 +71,7 @@ When a **Cloudflare, Turnstile, reCAPTCHA or hCaptcha** challenge blocks the pag
 <td width="33%" valign="top">
 
 ### 🔑 Private by design
-Keys never leave your machine. The server listens on localhost only, with **no telemetry and no phone-home**.
+Keys are saved on your own machine and sent only to the model provider they belong to. The server listens on localhost only, with **no telemetry and no phone-home**.
 
 </td>
 </tr>
@@ -153,6 +153,8 @@ Running a 32B model on your own card? A **live GPU strip** shows temperature, fa
 
 Most models stall at a **Cloudflare challenge, Turnstile, reCAPTCHA or hCaptcha**. Browser Agent spots the challenge and hands just that part to a dedicated CAPTCHA model running on your own machine. The model solves it and your main model picks the task back up, as above: *"challenge detected → solved → continuing"*.
 
+The helper is in the GitHub build only (the extension you load unpacked). The Chrome Web Store build doesn't include it.
+
 ### What you need
 
 The helper is built and tested for **[CaptchaKraken v1.2](https://huggingface.co/CaptchaKraken/CaptchaKraken-v1.2-GGUF)**. It's a free, open-weights CAPTCHA model (Qwen3.5-9B base, LGPL-3.0) trained on 44 puzzle types from 10 vendors.
@@ -171,6 +173,7 @@ The helper is built and tested for **[CaptchaKraken v1.2](https://huggingface.co
 
 ```bash
 # 1. Start Ollama with a 16k context (PowerShell: $env:OLLAMA_CONTEXT_LENGTH=16384; ollama serve)
+#    Only needed if the Ollama app isn't already running. If it is, give it the same context length instead.
 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
 
 # 2. In another terminal, download the model (about 6.5 GB)
@@ -318,11 +321,11 @@ Download **`browser-agent-server-vX.zip`** from the **[latest release](https://g
 |---|---|
 | Double-click **`Start Browser Agent.cmd`** | `./start.sh` in a terminal |
 
-Keep that window open. It's the small local server that runs your model, so keys and pages stay on your computer.
+Keep that window open. It's the small local server that runs the agent, so your keys and pages are handled on your computer and go only to the model you chose.
 
 ### 2. Add the extension
 
-> **Chrome Web Store:** coming soon. Once it's listed, it'll be a one-click install.
+> **Chrome Web Store:** coming soon. Once it's listed, it'll be a one-click install. The store version leaves out two things the GitHub build has: the `javascript_exec` tool and the CAPTCHA helper.
 
 Until then, install it manually: download **`browser-agent-extension-vX.zip`** from the same release and unzip it. Then open `chrome://extensions`, turn on *Developer mode*, click **Load unpacked**, and pick the folder. <table>
 <tr>
@@ -359,7 +362,7 @@ npm run build        # builds the extension into packages/extension/dist and typ
 npm run server       # or double-click Start Browser Agent.cmd
 ```
 
-Load `packages/extension/dist` unpacked and paste the token. `npm run release` builds all three downloads into `release/`: the server zip, the unpacked-extension zip, and the Chrome Web Store zip (which leaves out `javascript_exec`).
+Load `packages/extension/dist` unpacked and paste the token. `npm run release` builds all three downloads into `release/`: the server zip, the unpacked-extension zip, and the Chrome Web Store zip (which leaves out `javascript_exec` and the CAPTCHA helper).
 
 </details>
 
@@ -383,7 +386,7 @@ Load `packages/extension/dist` unpacked and paste the token. `npm run release` b
 |---|---|
 | **Purchases & payments** | buy, checkout, place order, pay, subscribe, donate, transfer, book, sell or trade |
 | **Logging in** | submitting a form that contains a password |
-| **Passwords & card details** | typing into password, card-number and other sensitive fields |
+| **Passwords & card details** | typing into password, card-number and other sensitive fields, and paste shortcuts (Ctrl/Cmd+V, Shift+Insert), which put your clipboard into the page |
 | **Sending & posting** | send, post, publish, reply, tweet |
 | **Deleting & cancelling** | delete, remove or close an account, deactivate, unsubscribe, cancel a subscription |
 | **Account & security changes** | changing a password, email or phone, turning 2FA on or off, removing a card or device |
@@ -392,6 +395,8 @@ Load `packages/extension/dist` unpacked and paste the token. `npm run release` b
 | **Accepting page dialogs** | answering "OK" to a page's `confirm()` or `prompt()` |
 | **Running scripts & uploading files** | `javascript_exec` and `file_upload` (when those tools are enabled) |
 | **Actions on unknown targets** | clicks or key presses whose target can't be inspected |
+
+Buttons are recognised by their label, in English, German, Spanish, Portuguese, French, Italian, Dutch, Chinese and Japanese. That's a heuristic, not a guarantee: an unusual label or another language can get past it.
 
 Some hard limits apply whatever you switch off: blocked sites, private networks (unless allowed), http(s) only, optional tools that are off, and the upload folder. Settings live in `data/settings.json` and can also be changed with `POST /api/settings`, e.g. `{"confirm": {"payments": false}}`.
 
@@ -435,7 +440,7 @@ npm run task -- --session s_abc123 "Now open the second one"
 | `captchaProtocol`, `startScript`, `contextTokens` | [CAPTCHA helper](#-captcha-helper) options |
 | `stream`, `timeoutMs`, `maxTokens`, `extraBody`, `headers` | Transport options, e.g. `extraBody: {"reasoning_effort": "high"}` |
 
-See [`models.example.json`](models.example.json) for ready-made profiles: Anthropic, OpenAI, Gemini, OpenRouter, Groq, NVIDIA NIM, NanoGPT, Volcano Ark, Ollama, LM Studio and generic vLLM/llama.cpp.
+See [`models.example.json`](models.example.json) for ready-made profiles: Anthropic, OpenAI, Gemini, OpenRouter, Groq, Volcano Ark, Ollama, LM Studio, a generic OpenAI-compatible one (vLLM / llama.cpp / other) and a mock profile for testing without a model. NVIDIA NIM and NanoGPT need no profile: add a key and their model lists are fetched.
 
 </details>
 
@@ -453,7 +458,7 @@ Permission mode, the **"Ask me before…" approval switches**, allowed and block
 
 <br>
 
-See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (default `127.0.0.1:7878`), a fixed `AGENT_TOKEN`, `AGENT_DEFAULT_PROFILE`, `AGENT_EXTENSION_IDS` (restricts which extensions may connect), `AGENT_ALLOWED_HOSTS` (extra hostnames the server answers to, for remote setups), `AGENT_DETECT_LOCAL=0` (don't auto-detect Ollama / LM Studio models), `AGENT_MODEL_LISTS=0` (don't fetch provider model lists; use only `models.json`), `AGENT_EXTRA_INSTRUCTIONS`, `AGENT_TRANSCRIPTS=0` (don't save transcripts) and `BA_GPU=0` (no GPU monitor).
+See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (default `127.0.0.1:7878`), a fixed `AGENT_TOKEN`, `AGENT_DEFAULT_PROFILE`, `AGENT_EXTENSION_IDS` (restricts which extensions may connect), `AGENT_ALLOWED_HOSTS` (extra hostnames the server answers to, for remote setups), `AGENT_DETECT_LOCAL=0` (don't auto-detect Ollama / LM Studio models), `AGENT_MODEL_LISTS=0` (don't fetch provider model lists; use only `models.json`), `AGENT_EXTRA_INSTRUCTIONS`, `AGENT_TRANSCRIPTS=0` (don't save transcripts), `AGENT_KEEP_DAYS` (a number of days: saved chats older than that are deleted when the server starts; unset keeps everything) and `BA_GPU=0` (no GPU monitor).
 
 </details>
 
@@ -466,22 +471,25 @@ See [`.env.example`](.env.example): provider keys, `AGENT_HOST` / `AGENT_PORT` (
   - Every way of activating a control is checked: clicks, drags, Enter/Space in `key`, newlines in `type`, and coordinate clicks inside cross-origin iframes. If the target can't be inspected, the agent asks instead of acting.
   - **An approved action is checked again right before it runs.** If the page navigated, or swapped the button while you were deciding, it's refused.
   - Accepting a page's `confirm()` or `prompt()` needs approval. Navigating away dismisses them rather than answering "yes".
-- **The extension applies the URL policy to every action**, including reads, tabs a page opened, and iframes. Document requests in the agent's tabs are checked before they're sent.
-- **Keys stay on the server.** It listens on `127.0.0.1`, requires the pairing token (timing-safe comparison), rejects WebSocket connections from web origins, and has no CORS. The extension never sees your keys.
+- **The extension applies the URL policy to every action**, including reads, tabs a page opened, and iframes. Document requests in the agent's tabs are checked before they're sent. A public-looking hostname whose page was actually served from a loopback or private address counts as private too (for pages loaded while the agent is working).
+- **Local files are off limits.** The agent can't read or control `file://` pages.
+- **Only the task's own tabs.** A tab opened from an agent tab joins the task only if the agent's own action just opened it. Tabs you open yourself, and anything opened after the task finished, don't join.
+- **Keys are kept by the server.** It listens on `127.0.0.1`, requires the pairing token (timing-safe comparison), rejects WebSocket connections from web origins, and has no CORS. A key you type in the side panel is passed to the server over the local WebSocket and saved there in plain text in `data/keys.json`, a file marked private to your user account. The extension doesn't store it and never gets the full key back, only its last 4 characters as a hint. The server sends a key to its model provider with each request.
 - **Pairing and mutual authentication.** Pairing only starts when you click **Pair this browser**. The extension and server do a key exchange, and each side works out the shared secret itself, so it never travels over the connection. Both then show the same 6-digit code, and you confirm it in the panel *and* in the server window. After that, every connection runs a challenge-response handshake: the server must prove it holds the secret *before* the extension reveals anything or accepts a single command. A program squatting on the server's port can't take over the browser, a rogue program can't pair itself without you seeing a code that doesn't match, and web pages can't talk to the server at all. Pasting the server's token instead of pairing works the same way.
 - **No DNS rebinding.** The server only answers requests addressed to `127.0.0.1`/`localhost`, and rejects WebSocket connections from web pages.
-- **Reading counts too.** In *Ask* mode the agent needs your OK for a site before it **reads** it, not just before it acts there. A page you allowed can't redirect or pop up to another site (say, your email) and have it read without asking. Clicks inside embedded frames from other sites need that site's approval too.
-- **No keyboard tricks.** Key sequences that move focus and then press Enter, Space or type (like Tab, Enter) need approval, because the control they'd reach can't be checked first. Enter in a chat box (how chat apps send), Ctrl/Cmd+Enter (how mail apps send) and single-key shortcuts outside text fields (like `#`, which deletes in some mail apps) are checked too.
+- **Reading counts too.** In *Ask* mode the agent needs your OK for a site before it **reads** it, not just before it acts there. A page you allowed can't redirect or pop up to another site (say, your email) and have it read without asking. Clicks inside embedded frames from other sites need that site's approval too, and embedded frames from a site you haven't approved aren't read out to the model.
+- **A site approval covers one site.** "Always allow" covers that site (with or without `www.`), not its other subdomains. To cover subdomains on purpose, put `*.example.com` in the allowed-sites list (`data/settings.json`).
+- **No keyboard tricks.** Key sequences that move focus and then press Enter, Space or type (like Tab, Enter) need approval, because the control they'd reach can't be checked first. Enter in a chat box (how chat apps send), Ctrl/Cmd+Enter (how mail apps send) and single-key shortcuts outside text fields (like `#`, which deletes in some mail apps) are checked too. Paste shortcuts (Ctrl/Cmd+V, Shift+Insert) ask first as well, under the *Passwords & card details* switch, because they put your clipboard into the page.
 - **The CAPTCHA helper** (off by default) only acts on genuine challenge widgets from the real providers (by hostname, not a URL that merely mentions "captcha"). It checks right before every click that the click lands on the widget itself, not something a page placed on top, and it refuses on blocked or private sites.
 - **No leaked keys.** API keys that a provider echoes back in an error message are masked before they reach the panel or logs. Links in the panel are https-only and always show their real destination.
 - **No telemetry.** The server only talks to the model endpoints you configure.
 - Credential-like URL parameters are redacted before reaching the model, and typed passwords are masked in page reads and logs.
-- **Local transcripts.** Each task is saved to `data/sessions/` on your machine (messages, actions, page text and screenshots). This powers chat history and is never uploaded. Delete the folder any time, or set `AGENT_TRANSCRIPTS=0` (chat history is then off too).
-- Chrome shows a "started debugging this browser" bar while the agent is attached. Extensions can't hide it, and clicking *Cancel* stops the task.
+- **Local transcripts.** Each task is saved to `data/sessions/` on your machine (messages, actions, page text and screenshots). This powers chat history and is never uploaded. Delete the folder any time, set `AGENT_KEEP_DAYS` to have chats older than that many days deleted when the server starts, or set `AGENT_TRANSCRIPTS=0` (chat history is then off too). Each paired browser sees only its own saved chats (chats saved by older versions stay visible to every browser paired with that server).
+- Chrome shows a "started debugging this browser" bar while the agent is working. The debugger detaches when the task goes idle, so the bar goes away, and re-attaches on your next message. Extensions can't hide it, and clicking *Cancel* stops the task.
 
 **Known limits** (nothing is perfectly secure, so here is what we know about):
-- Hostnames that *resolve* to private addresses (e.g. `127.0.0.1.nip.io`) aren't detected. Cross-process iframe navigations aren't intercepted at request time, though their content is still withheld.
-- When you approve a site in *Ask* mode, content that site **embeds** from other sites (iframes) can appear in what the agent reads. Acting inside those frames still needs their own approval.
+- A hostname that *resolves* to a private address (e.g. `127.0.0.1.nip.io`) can't be told from its name. It's caught once its page has loaded while the agent is working, so the first request to it is still sent. Cross-process iframe navigations aren't intercepted at request time, though their content is still withheld.
+- In *Ask* mode, content a site **embeds** from other sites (iframes) is left out of what the agent reads unless you approved that other site. In the other modes there is no per-site approval, so embedded content is read along with the page.
 - A page that has already been approved could try to trick the model into putting data into a link to that same site. Prompt-injection defences reduce this, but no agent can rule it out completely. For sensitive accounts, use a separate Chrome profile.
 - For remote setups (`AGENT_ALLOWED_HOSTS`), put the server behind TLS (`wss://`).
 
@@ -516,8 +524,8 @@ Design notes and trade-offs: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 ## 🧪 Testing
 
 ```bash
-npm test             # 238 unit + integration tests: policy, providers vs fake APIs, agent loop, server
-npm run test:e2e     # 75 browser tests: real Chromium + extension + server + fixture site
+npm test             # 270 unit + integration tests: policy, providers vs fake APIs, agent loop, server
+npm run test:e2e     # 91 browser tests: real Chromium + extension + server + fixture site
 npm run test:all
 npm run eval -- --profile openrouter            # live evals with a real model (costs tokens)
 npm run eval -- --profile ollama --task long-list --repeat 3
@@ -534,7 +542,7 @@ The end-to-end suite covers forms, iframes (including cross-origin), shadow DOM,
 | Side panel says **"Not paired" / "Error"** | The server prints the token on start. Paste it in Settings. |
 | **"Cannot reach http://127.0.0.1:11434/v1"** | Your local model server isn't running, or it uses another port. |
 | Clicks do nothing on a site | Some sites ignore synthetic input in background tabs, so keep the agent's tab visible. Check the action output for "covered by …". |
-| **"This page cannot be controlled"** | `chrome://` pages, the Web Store and other extensions are off-limits. Navigate to a normal site. |
+| **"This page cannot be controlled"** | `chrome://` pages, the Web Store, other extensions and local files (`file://`) are off-limits. Navigate to a normal site. |
 | Another debugger is attached | Close DevTools on that tab. |
 | The CAPTCHA helper isn't in the list | Start Ollama / LM Studio with CaptchaKraken loaded, then **Refresh model lists**. Only vision models that are ready appear. See [What you need](#what-you-need). |
 | The CAPTCHA helper never solves anything | The vision projector (`mmproj`) isn't loaded, or the context is under 16k. In Ollama, `ollama show` should list `vision`; set `OLLAMA_CONTEXT_LENGTH=16384`. |

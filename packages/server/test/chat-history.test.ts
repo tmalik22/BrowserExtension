@@ -46,7 +46,7 @@ async function start(): Promise<{ server: AgentServer; port: number }> {
 }
 
 /** A fake extension that answers browser RPCs and can make panel requests. */
-async function extension(port: number) {
+async function extension(port: number, clientId = 'history-client') {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   const frames: ServerFrame[] = [];
   const events: { sessionId: string; event: AgentEvent }[] = [];
@@ -68,7 +68,7 @@ async function extension(port: number) {
     ws.on('open', () => r());
     ws.on('error', j);
   });
-  ws.send(JSON.stringify({ type: 'hello', token: TOKEN, clientId: 'history-client', protocol: PROTOCOL_VERSION, extensionVersion: 'test', userAgent: 'vitest' }));
+  ws.send(JSON.stringify({ type: 'hello', token: TOKEN, clientId, protocol: PROTOCOL_VERSION, extensionVersion: 'test', userAgent: 'vitest' }));
   let n = 0;
   const call = <T,>(frame: Record<string, unknown>) =>
     new Promise<T>((resolve, reject) => {
@@ -178,6 +178,22 @@ describe('chat history', () => {
     await server.close();
   });
 
+  it("does not list, show or carry on another browser's chats", async () => {
+    const { server, port } = await start();
+    const owner = await extension(port);
+    const other = await extension(port, 'other-browser');
+    expect((await owner.call<ChatInfo[]>({ type: 'list_chats' })).map((c) => c.sessionId)).toEqual([secondId]);
+    expect(await other.call<ChatInfo[]>({ type: 'list_chats' })).toEqual([]);
+    await expect(other.call({ type: 'get_history', sessionId: secondId })).rejects.toThrow(/Unknown session/);
+    await expect(other.call({ type: 'get_history', sessionId: firstId })).rejects.toThrow(/Unknown session/);
+    await expect(other.call({ type: 'send_message', text: 'hi', continueFrom: secondId })).rejects.toThrow(/couldn't be found/);
+    // The browser that made them still can.
+    expect((await owner.call<History>({ type: 'get_history', sessionId: secondId })).archived).toBe(true);
+    owner.ws.close();
+    other.ws.close();
+    await server.close();
+  });
+
   it('refuses unknown chats and odd ids', async () => {
     const { server, port } = await start();
     const ext = await extension(port);
@@ -190,6 +206,24 @@ describe('chat history', () => {
 });
 
 describe('ChatHistory', () => {
+  it('scopes saved chats to the browser that made them; older chats without an owner stay visible', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ba-history-scope-'));
+    const write = (name: string, recs: object[]) => {
+      const chat = path.join(dir, 'sessions', name);
+      fs.mkdirSync(chat, { recursive: true });
+      fs.writeFileSync(path.join(chat, 'events.jsonl'), recs.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    };
+    write('2026-01-02T03-04-05_s_mine', [{ t: '2026-01-02T03:04:05Z', kind: 'session', client: 'browser-a' }, { t: '2026-01-02T03:04:06Z', kind: 'user', text: 'mine' }]);
+    write('2026-01-02T03-04-06_s_legacy', [{ t: '2026-01-02T03:04:06Z', kind: 'user', text: 'legacy' }]);
+    const h = new ChatHistory(dir);
+    expect(h.find('s_mine')).toMatchObject({ clientId: 'browser-a', title: 'mine', messages: 1 });
+    expect(h.list(50, 'browser-a').map((c) => c.sessionId).sort()).toEqual(['s_legacy', 's_mine']);
+    expect(h.list(50, 'browser-b').map((c) => c.sessionId)).toEqual(['s_legacy']);
+    // No browser given (the token-holding HTTP API): everything.
+    expect(h.list().map((c) => c.sessionId).sort()).toEqual(['s_legacy', 's_mine']);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it('marks a chat that was cut off and trims long summaries from the start', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ba-history-unit-'));
     const chat = path.join(dir, 'sessions', '2026-01-02T03-04-05_s_cut');

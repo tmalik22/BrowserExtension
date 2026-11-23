@@ -1,0 +1,4 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Bank</title></head>
+<body style="margin:0"><button id="pay" style="width:100%;height:80px" onclick="this.textContent='TRANSFERRED';parent.postMessage({swapped:'TRANSFERRED'},'*')">Transfer money</button>
+<script>parent.postMessage({ swapped: 'loaded' }, '*');</script>
+</body></html>

@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Unsaved form</title></head>
+<body style="font-family:sans-serif;padding:20px">
+<h1>Unsaved form</h1>
+<label>Draft <input id="draft"></label>
+<script>
+// Asks "Leave site?" once the user (or the agent) has typed something.
+addEventListener('beforeunload', function (e) {
+  if (!document.getElementById('draft').value) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+</script></body></html>

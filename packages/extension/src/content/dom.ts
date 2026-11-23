@@ -64,8 +64,12 @@ export function composedContains(ancestor: Element, node: Element | null): boole
 }
 
 /** Deepest element at a point, piercing open shadow roots. */
+/**
+ * The page's element at a point. The agent's own overlay (pill, input lock) is looked through:
+ * its input is delivered past it, so what counts is what the page has there.
+ */
 export function deepElementFromPoint(x: number, y: number): Element | null {
-  let el = document.elementFromPoint(x, y);
+  let el: Element | null = document.elementsFromPoint(x, y).find((e) => !e.hasAttribute(OVERLAY_ATTR)) ?? null;
   while (el?.shadowRoot) {
     const inner = el.shadowRoot.elementFromPoint(x, y);
     if (!inner || inner === el) break;
@@ -178,8 +182,9 @@ function isContentEditable(el: Element): boolean {
 
 /** Implicit/explicit ARIA role, plus "clickable" for generic elements with click affordances. */
 export function roleOf(el: Element, style?: CSSStyleDeclaration): string {
+  // The role goes into the page outline unquoted, so only a plain role token is taken from the page.
   const explicit = el.getAttribute('role')?.trim().split(/\s+/)[0]?.toLowerCase();
-  if (explicit && explicit !== 'presentation' && explicit !== 'none' && explicit !== 'generic') return explicit;
+  if (explicit && /^[a-z]{1,40}$/.test(explicit) && explicit !== 'presentation' && explicit !== 'none' && explicit !== 'generic') return explicit;
   const tag = el.tagName;
   switch (tag) {
     case 'A':

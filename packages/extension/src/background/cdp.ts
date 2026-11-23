@@ -2,7 +2,7 @@
  * chrome.debugger (CDP 1.3) attachment per tab, event routing, network-idle tracking, and
  * console/network buffers for read_console / read_network.
  */
-import { checkUrlPolicy, isRestrictedUrl, sanitizeUrl, truncate, type UrlPolicy } from '@ba/shared';
+import { checkUrlPolicy, hostOf, isPrivateHost, sanitizeUrl, truncate, type UrlPolicy } from '@ba/shared';
 
 /** URL policy per agent tab, enforced on document requests (incl. redirects) while running. */
 const tabPolicy = new Map<number, UrlPolicy>();
@@ -10,6 +10,54 @@ const tabActive = new Map<number, () => boolean>();
 export function setTabPolicy(tabId: number, policy: UrlPolicy, isActive?: () => boolean): void {
   tabPolicy.set(tabId, policy);
   if (isActive) tabActive.set(tabId, isActive);
+}
+
+// Private addresses behind public names -----------------------------------------------------------
+
+/**
+ * Hostnames whose page was served from a loopback/private address although the name itself looks
+ * public (a DNS record pointing at 127.0.0.1 or a router). The URL policy only sees names, so the
+ * address a document actually came from is checked here.
+ */
+const privateServed = new Map<string, { ip: string; endpoint: string }>();
+/**
+ * Private endpoints that served a page over verified HTTPS for a public name. A router or local
+ * dev server cannot do that for someone else's name, so such an endpoint is a local proxy or
+ * security tool (or an intranet site with a real certificate), not a page to keep the agent from.
+ */
+const trustedEndpoints = new Set<string>();
+
+function noteDocumentAddress(params: any): void {
+  if (params.type !== 'Document') return;
+  const r = params.response ?? {};
+  const ip = String(r.remoteIPAddress ?? '');
+  const url = String(r.url ?? '');
+  if (!ip || !/^https?:/.test(url) || !isPrivateHost(ip)) return;
+  const host = hostOf(url);
+  if (!host || isPrivateHost(host)) return; // the name alone already counts as private
+  const endpoint = `${ip}:${r.remotePort ?? ''}`;
+  if (r.securityState === 'secure') {
+    trustedEndpoints.add(endpoint);
+    return;
+  }
+  if (privateServed.size >= 500) privateServed.delete(privateServed.keys().next().value!);
+  privateServed.set(host, { ip, endpoint });
+}
+
+/** The private address a host's page was served from, if it was (and not through a local proxy). */
+export function privateAddressOf(host: string): string | null {
+  const e = privateServed.get(host.toLowerCase());
+  return e && !trustedEndpoints.has(e.endpoint) ? e.ip : null;
+}
+
+/** checkUrlPolicy, plus hosts that were seen to be served from a private address. */
+export function checkTabUrl(url: string, policy: UrlPolicy): string | null {
+  const e = checkUrlPolicy(url, policy);
+  if (e || policy.allowPrivateNetworks) return e;
+  const host = hostOf(url);
+  const ip = host ? privateAddressOf(host) : null;
+  if (!ip) return null;
+  return `Error: ${host} is served from a local/private network address (${ip}), which is blocked by policy. The user can enable "Allow private networks" in settings.`;
 }
 
 type Listener = (method: string, params: any) => void;
@@ -20,6 +68,8 @@ interface TabCdp {
   inflight: Map<string, { t: number; type?: string }>;
   lastNetworkActivity: number;
   loading: boolean;
+  /** CDP id of the tab's top-level frame: only its loading counts as "the page is loading". */
+  mainFrame?: string;
   console: string[];
   network: Map<string, { method: string; url: string; type?: string; status?: number; mime?: string; t0: number; ms?: number; failed?: string }>;
   networkOrder: string[];
@@ -72,6 +122,9 @@ export async function attach(tabId: number): Promise<void> {
     }
     s.attached = true;
     await send(tabId, 'Page.enable');
+    s.mainFrame = await send<{ frameTree?: { frame?: { id?: string } } }>(tabId, 'Page.getFrameTree')
+      .then((t) => t.frameTree?.frame?.id)
+      .catch(() => undefined);
     await send(tabId, 'Network.enable', { maxPostDataSize: 0 }).catch(() => {});
     // Act in background tabs without stealing the user's focus.
     await send(tabId, 'Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
@@ -213,6 +266,7 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
         n.status = params.response?.status;
         n.mime = params.response?.mimeType;
       }
+      noteDocumentAddress(params);
       break;
     }
     case 'Network.loadingFinished':
@@ -226,14 +280,21 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
       }
       break;
     }
+    // The event names only the frame, not whether it is the top one. A frame that loads later
+    // (an ad, an embed) must not mark the whole page as loading: nothing would clear it again
+    // until the next page load, and every action meanwhile would wait out its full timeout.
     case 'Page.frameStartedLoading':
-      if (params.frameId && !params.parentId) s.loading = true;
+      if (!s.mainFrame || params.frameId === s.mainFrame) s.loading = true;
+      break;
+    case 'Page.frameStoppedLoading':
+      if (!s.mainFrame || params.frameId === s.mainFrame) s.loading = false;
       break;
     case 'Page.loadEventFired':
       s.loading = false;
       break;
     case 'Page.frameNavigated':
       if (!params.frame?.parentId) {
+        s.mainFrame = params.frame?.id ?? s.mainFrame;
         s.inflight.clear();
       }
       break;
@@ -241,7 +302,7 @@ chrome.debugger.onEvent.addListener((source, method, params: any) => {
       const url: string = params.request?.url ?? '';
       const policy = tabPolicy.get(tabId);
       const active = tabActive.get(tabId)?.() ?? true;
-      const blocked = policy && active && /^https?:/.test(url) ? checkUrlPolicy(url, policy) : null;
+      const blocked = policy && active && /^https?:/.test(url) ? checkTabUrl(url, policy) : null;
       chrome.debugger
         .sendCommand({ tabId }, blocked ? 'Fetch.failRequest' : 'Fetch.continueRequest', blocked ? { requestId: params.requestId, errorReason: 'BlockedByClient' } : { requestId: params.requestId })
         .catch(() => {});
